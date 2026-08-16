@@ -67,9 +67,6 @@ A project claiming provable restraint should lead with its own limits:
   entry, re-linked the digests, and verification still passed. No signatures,
   no external anchor. It detects accident and third parties, not a determined
   operator.
-- **No human has completed an end-to-end OIDC consent login.** Discovery, JWKS,
-  PKCE and client authentication are verified against a live provider; the
-  consent leg is not.
 - **The dim-2048 retriever ingest is declared and unimplemented.** Retrieval is
   a linear scan. The constants remain and a test asserts nothing consumes them,
   so it fails the day the capability starts to exist.
