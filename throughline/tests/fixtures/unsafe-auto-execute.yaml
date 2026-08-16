@@ -1,0 +1,10 @@
+version: 1
+effects:
+  - id: RULE-001
+    effect_type: notify.operator
+    reversibility_class: reversible
+    auto_execute: true
+  - id: RULE-666
+    effect_type: payment.release
+    reversibility_class: irreversible
+    auto_execute: true

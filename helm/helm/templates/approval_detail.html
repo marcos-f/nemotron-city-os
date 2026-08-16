@@ -1,0 +1,80 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block main %}
+<h1>{{ ctx.page.h1 }}</h1>
+{{ c.stage_timeline(ctx.stages, "scenario://breaker/ledger-walk") }}
+
+<div class="box" id="event-summary" data-coordinate="scenario://breaker/ledger-walk">
+  <h3>Approval record{% if ctx.record %} &mdash; {{ ctx.record.description or ctx.record.effect_id }}{% endif %}</h3>
+  {% if ctx.record %}
+  <dl>
+    <dt>effect</dt><dd>{{ ctx.record.effect_id }} ({{ ctx.record.reversibility_class }})</dd>
+    <dt>approval</dt><dd>{{ ctx.record.id }}</dd>
+    <dt>state</dt><dd>{{ ctx.record.state }}</dd>
+    <dt>signal</dt><dd>{{ ctx.record.signal_id or '—' }}</dd>
+  </dl>
+  <h3 id="approval-block" data-coordinate="scenario://signet/subject-in-record">APPROVAL block</h3>
+  <dl data-coordinate="scenario://signet/subject-in-record">
+    <dt>subject</dt><dd>{{ ctx.record.decided_by or 'not yet decided — the queue is waiting for a human' }}</dd>
+    <dt>provider</dt><dd>{{ ctx.record_provider }}</dd>
+    <dt>issuer</dt><dd>{% if ctx.record_issuer.known %}{{ ctx.record_issuer.text }}
+      {%- else %}<span class="muted">{{ ctx.record_issuer.text }}</span>{% endif %}</dd>
+    <dt>auth mode</dt><dd>{{ ctx.record_issuer.mode }}</dd>
+    <dt>decided_at</dt><dd>{{ ctx.record.decided_at or '—' }}</dd>
+    <dt>rationale</dt><dd>{{ ctx.record.rationale or '—' }}</dd>
+  </dl>
+  {% else %}
+  <p class="muted">No approval record to display — the queue is empty and nothing has been
+    decided in this ledger yet.</p>
+  {% endif %}
+
+  <h3>Hash chain &mdash; effect &rarr; judgment &rarr; signal</h3>
+  {% if ctx.walk.hops %}
+  <div class="hash-strip" data-coordinate="scenario://breaker/ledger-walk"
+       style="display:flex;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:.85em;align-items:center">
+    {%- for hop in ctx.walk.hops %}
+    <span class="badge">{{ hop.kind }} {{ hop.hash_prefix }}
+      <span class="verify-badge">{{ '✓' if hop.verified else '✗' }}</span></span>{{ '→' if not loop.last }}
+    {%- endfor %}
+  </div>
+  <p class="muted" style="font-size:15px">{{ ctx.walk.hop_count }} hop(s),
+    {{ 'complete' if ctx.walk.complete else 'incomplete' }};
+    every digest recomputed at read time.</p>
+  {% else %}
+  <p class="muted">No chain to walk yet.</p>
+  {% endif %}
+</div>
+
+{#- The decision lives HERE, on the record it decides. 218 of 219 held
+    effects were unreachable because the only Approve control in the product
+    was pinned to whichever proposal /breaker happened to show. -#}
+{% if ctx.decidable %}{{ c.decision_actions(ctx, ctx.record) }}{% endif %}
+<div class="suggested-actions" data-coordinate="scenario://breaker/ledger-walk">
+  <a class="btn" href="/breaker{% if ctx.record %}?effect={{ ctx.record.effect_id }}{% endif %}">View in breaker</a>
+  <a class="btn" href="/console">Back to helm</a>
+</div>
+
+<div class="box refuse" id="agent-refusal" data-coordinate="scenario://helm/agent-refusal">
+  <h3>REFUSED VARIANT &mdash; same record shape</h3>
+  {% if ctx.refusals %}
+  {%- for r in ctx.refusals %}
+  <dl>
+    <dt>effect</dt><dd>{{ r.effect_id }}</dd>
+    <dt>principal</dt><dd>{{ r.decided_by }}</dd>
+    <dt>caller role</dt><dd>{{ r.caller_role }}</dd>
+    <dt>reason</dt><dd>{{ r.reason }}</dd>
+    <dt>ledger seq</dt><dd>{{ r.seq }} &middot; {{ r.hash_prefix }}</dd>
+  </dl>
+  {%- endfor %}
+  <p><b>MCP caller REFUSED:</b> approval requires a human signet role. The refusal is a
+    ledger entry, as permanent as an approval.</p>
+  {% else %}
+  <p class="muted">No agent refusal is on this ledger yet. Ask NemoClerk to approve the
+    held dispatch and one will appear here, with its principal named.</p>
+  {% endif %}
+</div>
+<div class="note" data-coordinate="scenario://helm/agent-refusal"><b>NOTE:</b> the embedded
+  copilot (or any MCP-connected agent) can propose and even walk the ledger, but it cannot
+  hold the signet role &mdash; approval of an irreversible effect always requires a human
+  OIDC-identified operator.</div>
+{% endblock %}

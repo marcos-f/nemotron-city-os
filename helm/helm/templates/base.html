@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}NemoCity — helm{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+{# Theme is applied before first paint so the page never flashes the wrong
+   surface. The server-side preference is the default; localStorage wins. #}
+<script>
+(function () {
+  var stored = null;
+  try { stored = localStorage.getItem("nnd-theme"); } catch (e) {}
+  var theme = stored || {{ (ctx.prefs.theme if ctx is defined else 'system')|tojson }};
+  if (theme && theme !== "system") {
+    document.documentElement.setAttribute("data-theme", theme);
+  }
+})();
+</script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% block body %}{% endblock %}
+<script>
+window.HELM = {{ boot|tojson }};
+</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

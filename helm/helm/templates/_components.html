@@ -1,0 +1,305 @@
+{# Shared components — the 3-column app frame per ux/wireframes.md rev 6. #}
+
+{% macro topbar(ctx) %}
+<header class="topbar" data-coordinate="scenario://helm/shell-tabs">
+  <span class="product-name">NemoCity</span>
+  <span style="display:inline-flex;align-items:center;gap:12px">
+  {# The badge states this session's AUTH MODE in both directions: it names
+     the authority that vouched, and keeps saying MOCK when none did. Both
+     the text and the style come from ctx.identity, so the badge cannot
+     drift from the session it is drawn beside. #}
+  {% if ctx.identity.authenticated %}
+    <span class="{{ 'mock-badge' if ctx.identity.mock else 'badge' }}"
+          data-coordinate="scenario://signet/oidc-login"
+          data-auth-mode="{{ ctx.identity.auth_mode }}"
+          title="{{ ctx.identity.auth_detail }}"
+      >{{ ctx.identity.auth_badge }}</span>
+  {% endif %}
+  {{ profile_menu(ctx) }}
+  </span>
+</header>
+{% endmacro %}
+
+{% macro profile_menu(ctx) %}
+{# The ONLY route to admin, and the home of preferences. A discrete 32px
+   avatar button with an explicit JS panel — never <details>. #}
+<div class="user-menu" data-coordinate="scenario://signet/oidc-login">
+  <button class="avatar-btn" aria-haspopup="menu" aria-expanded="false"
+          aria-label="Account menu — {{ ctx.identity.subject }}"
+          title="{{ ctx.identity.subject }}">{{ ctx.identity.initials }}<span class="signet-dot" aria-hidden="true"></span></button>
+  <div class="menu" role="menu" data-open="false">
+    <div class="who">
+      <div class="name">{{ ctx.identity.subject }}</div>
+      <div class="meta">{{ ctx.identity.provider }}{% if ctx.identity.mock %} (mock){% endif %} &middot; signet &middot; role: {{ ctx.identity.role }}</div>
+      <div class="meta">{{ ctx.identity.auth_detail }}</div>
+    </div>
+    <div class="sep"></div>
+    <span class="group-label">Preferences</span>
+    <div class="pref-row"><span class="label">Theme</span>
+      <span class="theme-seg theme-toggle">
+        <button data-t="light" onclick="setTheme('light')">light</button>
+        <button data-t="dark" onclick="setTheme('dark')">dark</button>
+        <button data-t="system" onclick="setTheme('system')">system</button>
+      </span></div>
+    <div class="pref-row"><span class="label">NemoClerk rail</span>
+      <span class="muted" style="font-size:13px">remembered</span></div>
+    <div class="pref-row"><span class="label">Feeds rail</span>
+      <span class="muted" style="font-size:13px">remembered</span></div>
+    <div class="sep"></div>
+    <a href="/profile">Profile &amp; display identity</a>
+    {% if ctx.identity.is_admin %}
+    <a href="/admin">Admin &amp; site configuration</a>
+    <a href="/admin/stewards">Federation stewards</a>
+    <span class="item muted" style="padding-top:0">visible to admin role only</span>
+    {% endif %}
+    <div class="sep"></div>
+    <a href="/logout"><b>Sign out</b></a>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro tabs(active) %}
+<nav class="tabs" data-coordinate="scenario://helm/shell-tabs">
+  <a href="/console"{% if active == 'helm' %} aria-current="page"{% endif %}>helm</a>
+  {%- for tab in tabs_list %}
+  <a href="{{ tab.path }}"{% if active == tab.slug %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+  {%- endfor %}
+</nav>
+{% endmacro %}
+
+{% macro feeds_rail(ctx) %}
+<aside class="feeds" data-coordinate="feature-area://helm">
+  <div class="feeds-head">
+    <span class="eyebrow">Feeds</span>
+    <button class="feeds-collapse" onclick="toggleFeeds()" title="collapse feeds"
+            aria-expanded="true" aria-label="collapse feeds">&#10216;</button>
+  </div>
+  {%- for feed in ctx.feeds %}
+  <details class="feed" data-coordinate="feature-area://helm"
+           data-feed="{{ feed.name }}"
+           {% if feed.arrived %}data-arrived="true"{% endif %}
+           {% if feed.name == ctx.page.open_feed %}open{% endif %}>
+    <summary>{{ feed.name }}
+      <span class="feed-status">
+        {%- if feed.online -%}
+        <span class="{{ feed.kind }}">{{ feed.status }}</span>
+        {%- else -%}
+        <span class="hot" title="component offline — {{ feed.component }} is not serving on :{{ ctx.ports[feed.component] }}">offline</span>
+        {%- endif -%}
+      </span>
+    </summary>
+    {%- if feed.arrived %}
+    <p class="arrival-banner">new class registered — hot-loaded, no redeploy</p>
+    {%- endif %}
+    {%- if feed.name == ctx.page.open_feed %}
+    {%- if feed.online %}
+    <ul class="event-list" data-coordinate="feature-area://helm">
+      {%- for event in feed.events %}
+      <li{% if loop.first %} aria-current="true"{% endif %}
+          data-seq="{{ event.seq }}">
+        <span class="ts">{{ event.ts }}</span>{{ event.type }} &mdash; {{ event.description }}
+      </li>
+      {%- else %}
+      <li><span class="ts">--:--:--</span><span class="muted">no events on this feed yet</span></li>
+      {%- endfor %}
+    </ul>
+    {%- else %}
+    <ul class="event-list"><li><span class="ts">--:--:--</span>
+      <span class="muted">component offline &mdash; {{ feed.component }} is not serving on its port</span></li></ul>
+    {%- endif %}
+    {%- endif %}
+  </details>
+  {%- endfor %}
+</aside>
+{% endmacro %}
+
+{% macro stage_timeline(stages, coordinate, extra_class='') %}
+<div class="stage-timeline {{ extra_class }}" data-coordinate="{{ coordinate }}" role="img"
+     aria-label="stage timeline">
+  {%- for s in stages %}
+  <div class="stage {{ 'refused' if s.state == 'refused' else s.state }}">
+    <div class="line-to-next"></div>
+    <div class="dot {{ s.state }}" title="{{ s.stage }}: {{ s.state }}"></div>
+    <div class="label">{{ s.stage }}</div>
+    {#- a state must never be carried by hue alone: at projector distance an
+        amber REFUSED label reads as "still waiting", inverting the beat -#}
+    {%- if s.state == 'refused' %}<div class="sub"><span class="refused-pill">refused</span></div>
+    {%- elif s.sub %}<div class="sub">{{ s.sub|safe }}</div>{% endif %}
+  </div>
+  {%- endfor %}
+</div>
+{% endmacro %}
+
+{% macro nemoclerk_rail(ctx) %}
+<aside class="copilot-rail" id="copilot-rail" data-coordinate="scenario://helm/agent-drives">
+  <div class="rail-head">
+    <h2>&#11049; NemoClerk</h2>
+    <button class="icon-btn" onclick="openScenario()" title="About this scenario"
+            aria-label="About this scenario">&#9432;</button>
+    <button class="rail-collapse" onclick="toggleRail()" title="collapse NemoClerk"
+            aria-expanded="true" aria-label="collapse NemoClerk">&#10217;</button>
+  </div>
+  <details class="model-ladder" id="model-ladder">
+    <summary title="{{ ctx.clerk.note }}">{{ ctx.clerk.runtime }} &middot;
+      {{ ctx.clerk.tier }}{% if ctx.clerk.model %} &middot; {{ ctx.clerk.model }}{% endif %}</summary>
+    <ol class="rungs">
+      {%- for rung in ctx.clerk.rungs %}
+      <li class="rung {{ rung.state }}">
+        <span class="mark" aria-hidden="true">{{ '●' if rung.state == 'active' else ('○' if rung.state in ('standby', 'probing') else '✕') }}</span>
+        <span class="what"><b>{{ rung.model }}</b>
+          <span class="where">{{ rung.silicon }}{% if rung.host %} · {{ rung.host }}{% endif %}</span></span>
+        <span class="state">{{ rung.state }}</span>
+      </li>
+      {%- endfor %}
+    </ol>
+    <p class="muted" style="font-size:12px;margin:6px 0 0">The rung that answers a
+      turn is the rung named in that turn's ledger entry.</p>
+  </details>
+  {%- if ctx.banner_text %}
+  <div class="situation-banner {{ ctx.page.banner_tone }}" id="situation-banner"
+       data-coordinate="feature-area://{{ ctx.page.feature_area }}">
+    <div class="msg"><b>{{ ctx.banner_text }}</b>
+      {%- if ctx.page.banner_sub %}<span class="sub">{{ ctx.page.banner_sub }}</span>{% endif %}</div>
+    {%- if ctx.page.banner_link %}
+    <a class="view-link" href="{{ ctx.page.banner_link }}">view</a>
+    {%- endif %}
+    <button class="dismiss" onclick="dismissSituationBanner()" title="dismiss">&times;</button>
+  </div>
+  {%- endif %}
+  {#- The transcript is a LIVE REGION. app.js replaces its contents on every
+      turn — the "calling its tools…" placeholder, then the answer — and a
+      screen-reader user pressing Send used to hear nothing at all for any
+      of it. The ledger tail on helm.html already announces itself the same
+      way; this is that idiom, not a new one.
+
+      POLITE, not assertive, and deliberately: the announcement follows the
+      user's own Send, so it is expected rather than an interruption, and
+      assertive would cut across whatever the user is still reading or
+      typing. Nothing here is an emergency; a refusal is still an answer.
+      aria-relevant="additions" so removing the placeholder is silent, and
+      aria-atomic="false" so a new turn is read alone rather than dragging
+      the whole conversation with it. -#}
+  <div class="transcript{{ ' is-empty' if not ctx.transcript }}"
+       role="status" aria-live="polite" aria-atomic="false"
+       aria-relevant="additions" aria-label="NemoClerk transcript"
+       data-coordinate="scenario://helm/agent-drives">
+    {%- for turn in ctx.transcript %}
+    <p class="turn"><span class="who">{{ 'you:' if turn.role == 'you' else 'NemoClerk:' }}</span>
+      {{ turn.text }}
+      {%- if turn.chips %}<span class="chips">
+        {%- for chip in turn.chips %}
+        <span class="tool-chip{{ ' refused' if chip.refused else '' }}"
+              {% if chip.refused %}data-coordinate="scenario://helm/agent-refusal"{% endif %}
+              title="{{ chip.summary }}">{{ chip.chip }}{{ ' · ledgered' if chip.refused else '' }}</span>
+        {%- endfor %}
+      </span>{% endif %}
+    </p>
+    {%- else %}
+    <div class="empty">
+      <span class="glyph" aria-hidden="true">&#11049;</span>
+      <p><b>No exchange yet on this page.</b></p>
+      <p>Ask me about {{ ctx.page.feature_area }}, or pick a prompt below. Every
+        answer carries the tool call it came from — no chip, no claim.</p>
+    </div>
+    {%- endfor %}
+  </div>
+  <div class="prompt-chips" data-coordinate="scenario://helm/agent-drives">
+    {%- for chip in ctx.page.chips %}
+    <button type="button">{{ chip }}</button>
+    {%- endfor %}
+  </div>
+  <div class="composer" data-coordinate="scenario://helm/agent-drives">
+    <span class="fake-caret" aria-hidden="true"></span>
+    <input type="text" placeholder="{{ ctx.page.placeholder }}" aria-label="Message NemoClerk">
+    <button class="send" type="button">Send</button>
+  </div>
+  <p class="composer-note">grounded: every answer carries its tool call &middot;
+    session scoped to this page</p>
+  <details class="about" data-coordinate="use-case://helm/console">
+    <summary>About this module</summary>
+    <div class="body">
+      <dl>
+        {%- for key, value in ctx.page.about.as_dict().items() %}
+        <dt>{{ key }}</dt><dd>{{ value }}</dd>
+        {%- endfor %}
+      </dl>
+      <div class="wow">&#9889; <b>The wow:</b> {{ ctx.page.about.wow }}</div>
+    </div>
+  </details>
+</aside>
+{% endmacro %}
+
+{% macro scenario_modal(ctx) %}
+<dialog class="scenario-modal" id="scenario-modal" data-coordinate="{{ ctx.page.coordinate }}">
+  <div class="head"><h3>About this scenario</h3>
+    <button class="icon-btn" onclick="closeScenario()" title="close" aria-label="close">&times;</button></div>
+  <div class="body">
+    {%- for key, value in ctx.page.about.as_dict().items() %}
+    <span class="eyebrow">{{ key }}</span><div>{{ value }}</div>
+    {%- endfor %}
+    <div class="wow">&#9889; <b>The wow:</b> {{ ctx.page.about.wow }}</div>
+  </div>
+</dialog>
+{% endmacro %}
+
+{% macro offline_pane(component, port, detail, reason='never_built', last_seen=None) %}
+{#- Two very different facts wore the same words. This macro was written for
+    blindspot, which genuinely was never built, and then reused for ANY
+    unreachable sibling — so a blip on :8600 made the console announce that
+    its own ledger substrate was never built, while that substrate's chain
+    sat intact on disk. never_built keeps blindspot's copy exactly as it
+    was; unreachable is a different claim and says so. -#}
+<div class="offline-pane" id="offline-{{ component }}"
+     data-coordinate="feature-area://{{ component }}" data-reason="{{ reason }}">
+  {%- if reason == 'never_built' %}
+  <span class="eyebrow">component offline</span>
+  <p><b>{{ component }}</b> is designed, not built — nothing is serving on
+    <span class="mono">:{{ port }}</span>. This pane is its wireframe, rendered in
+    place of live data. No figure on this page was invented to fill the gap.</p>
+  {%- if detail %}<p class="muted" style="font-size:15px">{{ detail }}</p>{% endif %}
+  {%- else %}
+  <span class="eyebrow">component not responding</span>
+  <p><b>{{ component }}</b> is built and is not answering on
+    <span class="mono">:{{ port }}</span> right now. This is an outage, not an
+    absence: helm cannot read it, so helm reports nothing about it rather than
+    reporting zero.</p>
+  {%- if last_seen and last_seen.value %}
+  <p class="muted" style="font-size:15px">Last verified
+    {%- if last_seen.head %} at head <span class="mono">{{ last_seen.head }}</span>{% endif %}
+    {%- if last_seen.value %}, {{ last_seen.value }}{% endif %}
+    {%- if last_seen.at %} ({{ last_seen.at }}){% endif %}.</p>
+  {%- endif %}
+  {%- if detail %}<p class="muted" style="font-size:15px">{{ detail }}</p>{% endif %}
+  <div class="suggested-actions" style="margin:12px 0 0">
+    <a class="btn compact btn-secondary" href="">Retry</a>
+  </div>
+  {%- endif %}
+</div>
+{% endmacro %}
+
+{% macro decision_actions(ctx, approval) %}
+<div class="suggested-actions" data-coordinate="scenario://breaker/identified-approval">
+  {%- if approval and ctx.identity.may_approve %}
+  <button class="btn btn-primary" data-decide="{{ approval.id }}" data-decision="approve">
+    Approve as {{ ctx.identity.subject }}</button>
+  <button class="btn btn-secondary" data-decide="{{ approval.id }}" data-decision="reject">
+    Reject</button>
+  {%- elif approval %}
+  <button class="btn btn-primary" disabled title="your role may not approve">
+    Approve as {{ ctx.identity.subject }}</button>
+  {%- endif %}
+  <a class="btn" href="/approval-detail">Walk the chain</a>
+</div>
+{%- if approval %}
+<p class="actions-caption">Requires signet{% if not ctx.identity.may_approve %} —
+  your role is <b>{{ ctx.identity.role }}</b>, which may read the queue but not decide{% endif %}.</p>
+{%- endif %}
+{#- The outcome of releasing an irreversible effect — approved, REFUSED, or
+    "not recorded" — is written here by app.js and nowhere else, so this is
+    the region that must speak. Polite by default because the operator is
+    waiting on their own click; app.js raises it to assertive for the
+    failure branches, where "the decision was NOT recorded" is exactly the
+    sentence a user must not be allowed to miss. Atomic, because half of
+    "REFUSED — a signet subject is required" is worse than none of it. -#}
+<div id="decision-result" role="status" aria-live="polite" aria-atomic="true"></div>
+{% endmacro %}

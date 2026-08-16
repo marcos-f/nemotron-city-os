@@ -1,0 +1,198 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block main %}
+<h1>{{ ctx.page.h1 }}</h1>
+{{ c.stage_timeline(ctx.stages, "scenario://helm/ledger-tail") }}
+<p class="note" style="margin-top:0"><b>LIVE LOOP:</b> every signal on this console
+  cycles through all six stages continuously &mdash; this is the steady state, not a
+  single event.</p>
+
+{% if not ctx.overview.substrate_online %}
+{{ c.offline_pane("throughline", 8600, ctx.services.throughline.detail,
+                  reason="unreachable", last_seen=ctx.substrate_last_seen) }}
+{% endif %}
+
+<div class="box" id="event-summary" data-coordinate="scenario://helm/ledger-tail">
+  <h3>Ledger tail (live)</h3>
+  {% if ctx.ledger.online %}
+  <table id="ledger-tail" data-coordinate="scenario://helm/ledger-tail">
+    <thead><tr><th>seq</th><th>when</th><th>kind</th><th>subject</th><th>hash-prefix</th><th>verify</th></tr></thead>
+    <tbody aria-live="polite" aria-relevant="additions">
+      {%- for row in ctx.ledger.rows %}
+      <tr data-coordinate="scenario://helm/ledger-tail"
+          {% if row.effect_id %}data-effect-id="{{ row.effect_id }}"{% endif %}
+          {% if loop.first %}class="highlight" aria-current="true" data-arrived="true"{% endif %}>
+        <td>{{ row.seq }}</td>
+        <td class="mono">{{ row.ts }}</td>
+        <td>{{ row.kind }}{% if row.repeats > 1 %}
+          <span class="badge" title="{{ row.repeats }} consecutive identical entries">&times;{{ row.repeats }}</span>{% endif %}</td>
+        <td>{{ row.subject or '—' }}</td>
+        <td class="mono">{{ row.hash_prefix }}</td>
+        <td>
+          {%- if row.effect_id %}
+          <a class="verify-link" href="/walk/{{ row.effect_id }}">
+            <span class="badge verify-badge">{{ '✓' if row.verified else '✗' }}</span>
+            cause walk</a>
+          {%- else %}
+          <span class="badge verify-badge">{{ '✓' if row.verified else '✗' }}</span>
+          {%- endif %}
+        </td>
+      </tr>
+      {%- else %}
+      <tr><td colspan="6" class="muted">the chain is readable and holds nothing yet</td></tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="font-size:15px">chain length {{ ctx.ledger.chain_length }} &middot;
+    verification {{ 'valid' if ctx.overview.ledger_valid else 'FAILED' }} &middot;
+    head {{ ctx.ledger.head[:8] }}</p>
+  {% else %}
+  <p><span class="badge" style="background:rgba(var(--danger-rgb),.16);color:var(--danger)">
+    ledger unreadable</span> throughline is not responding on :8600, so there is
+    no tail to show. helm is not asserting anything about the chain's contents.</p>
+  {% endif %}
+</div>
+
+<div class="box" id="approval-queue" data-coordinate="scenario://breaker/gate-hold"
+     style="border-left:3px solid var(--{{ 'danger' if not ctx.gate.known else ('amber' if ctx.pending else 'accent') }})">
+  <h3>Approval queue</h3>
+  {% if not ctx.gate.known %}
+  {#- UNKNOWN is not EMPTY. Telling an operator "nothing is held" while the
+      gate is unreachable is the worst available way to fail this display. -#}
+  {#- app.js refreshApprovals() rewrites this badge's text in place when a
+      turn changes what is held, so it announces. Polite: a count moving is
+      information, not an interruption. -#}
+  <p><span class="badge hold-badge" role="status" aria-live="polite" aria-atomic="true"
+           style="background:rgba(var(--danger-rgb),.16);color:var(--danger)">
+    gate state unknown</span>
+    throughline is not responding, so helm cannot see the gate.
+    {% if ctx.gate.has_history %}Last seen <b>{{ ctx.gate.last_known }}</b> held
+    {%- if ctx.gate.last_seen_at %} at {{ ctx.gate.last_seen_at }}{% endif %}.{% endif %}</p>
+  <p class="muted" style="font-size:15px">{{ ctx.gate.detail }} — no figure was
+    substituted. helm is not asserting that nothing is held.</p>
+  <div class="suggested-actions"><a class="btn btn-secondary" href="/console">Retry</a></div>
+  {% elif ctx.pending %}
+  <p><span class="badge hold-badge" role="status" aria-live="polite" aria-atomic="true"
+      >{{ ctx.pending|length }}
+    approval{{ '' if ctx.pending|length == 1 else 's' }} waiting</span>
+    every one of these is held for a human and none of them times out.</p>
+  {#- Search first, because with a queue in the hundreds the fastest route
+      to one held effect is naming it, not walking to it. -#}
+  <form class="queue-filter" method="get" action="/console" role="search"
+        aria-label="Search the approval queue">
+    <label class="visually-hidden" for="queue-search">Search held effects by
+      approval id, effect id, description or reversibility class</label>
+    <input type="search" id="queue-search" name="q" value="{{ ctx.queue_page.query }}"
+           placeholder="Search id, effect, description, or “irreversible”">
+    {%- if ctx.queue_page.per != 25 %}
+    <input type="hidden" name="per" value="{{ ctx.queue_page.per_label }}">
+    {%- endif %}
+    <button class="btn compact" type="submit">Search</button>
+    {%- if ctx.queue_page.filtered %}
+    <a class="btn compact btn-secondary" href="{{ ctx.queue_page.clear_href }}">Clear</a>
+    {%- endif %}
+  </form>
+
+  {#- The count line is not decoration. Showing 25 rows out of 340 without
+      saying so is an unlabelled claim that 25 is all there is. -#}
+  <p class="queue-count muted" id="queue-count" style="font-size:15px"
+     aria-live="polite">
+    {%- if ctx.queue_page.matching %}
+    Showing <b>{{ ctx.queue_page.first_index }}&ndash;{{ ctx.queue_page.last_index }}</b>
+    of <b>{{ ctx.queue_page.matching }}</b>
+    {%- if ctx.queue_page.filtered %} matching{% endif %} held effect{{ '' if ctx.queue_page.matching == 1 else 's' }}
+    {%- if ctx.queue_page.filtered %} (of {{ ctx.queue_page.total }} held in total)
+    {%- endif %} &middot; page {{ ctx.queue_page.page }} of {{ ctx.queue_page.pages }}.
+    {%- else %}
+    <b>No held effect matches “{{ ctx.queue_page.query }}”.</b>
+    {{ ctx.queue_page.total }} effect{{ '' if ctx.queue_page.total == 1 else 's' }}
+    remain{{ 's' if ctx.queue_page.total == 1 else '' }} held &mdash; the filter hid
+    them, nothing was released.
+    {%- endif %}
+    Every held effect is reachable from this queue; none is hidden behind the page size.
+  </p>
+
+  {% if ctx.queue_page.rows %}
+  <table id="approval-queue-table">
+    <thead><tr><th>approval</th><th>subject</th><th>class</th><th>waiting</th><th></th></tr></thead>
+    <tbody>
+      {%- for row in ctx.queue_page.rows %}
+      <tr data-approval-id="{{ row.id }}">
+        <td><a href="{{ row.href }}">{{ row.id }}</a></td>
+        <td>{{ row.description }}</td>
+        <td>{% if row.reversibility == 'irreversible' %}<b>{{ row.reversibility }}</b>
+            {%- else %}{{ row.reversibility }}{% endif %}</td>
+        <td>{{ row.age }}</td>
+        <td><a class="btn compact" href="{{ row.href }}">Review &amp; decide</a></td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {#- Pager. First and last are always one hop, so no held effect is ever
+      more than two interactions away, and "all" collapses it to one. -#}
+  {% if ctx.queue_page.pages > 1 or not ctx.queue_page.showing_all %}
+  <nav class="queue-pager" id="queue-pager" aria-label="Approval queue pages">
+    <a class="btn compact{{ '' if ctx.queue_page.first_href else ' is-disabled' }}"
+       href="{{ ctx.queue_page.first_href or '#approval-queue' }}"
+       {% if not ctx.queue_page.first_href %}aria-disabled="true"{% endif %}
+       aria-label="First page">&laquo; First</a>
+    <a class="btn compact{{ '' if ctx.queue_page.prev_href else ' is-disabled' }}"
+       href="{{ ctx.queue_page.prev_href or '#approval-queue' }}"
+       {% if not ctx.queue_page.prev_href %}aria-disabled="true"{% endif %}
+       rel="prev" aria-label="Previous page">&lsaquo; Prev</a>
+    {%- for number in ctx.queue_page.numbers %}
+    <a class="btn compact queue-page-number{{ ' is-current' if number.current else '' }}"
+       href="{{ number.href }}"
+       {% if number.current %}aria-current="page"{% endif %}
+       aria-label="Page {{ number.page }}">{{ number.page }}</a>
+    {%- endfor %}
+    <a class="btn compact{{ '' if ctx.queue_page.next_href else ' is-disabled' }}"
+       href="{{ ctx.queue_page.next_href or '#approval-queue' }}"
+       {% if not ctx.queue_page.next_href %}aria-disabled="true"{% endif %}
+       rel="next" aria-label="Next page">Next &rsaquo;</a>
+    <a class="btn compact{{ '' if ctx.queue_page.last_href else ' is-disabled' }}"
+       href="{{ ctx.queue_page.last_href or '#approval-queue' }}"
+       {% if not ctx.queue_page.last_href %}aria-disabled="true"{% endif %}
+       aria-label="Last page">Last &raquo;</a>
+    <span class="queue-sizes">rows per page:
+      {%- for size in ctx.queue_page.sizes %}
+      <a class="btn compact{{ ' is-current' if size.current else '' }}"
+         href="{{ size.href }}"
+         {% if size.current %}aria-current="true"{% endif %}
+         aria-label="Show {{ size.label }} rows per page">{{ size.label }}</a>
+      {%- endfor %}
+    </span>
+  </nav>
+  {% endif %}
+  <p class="muted" style="font-size:15px">Every one is addressable at
+    <span class="mono">/approval-detail/&lt;id&gt;</span>, and
+    <a href="{{ ctx.queue_page.show_all_href }}">every held effect can be listed on one
+      page</a> &mdash; nothing in this queue is unreachable.</p>
+  {% else %}
+  <p><span class="badge verify-badge">0 waiting</span> the gate is reachable and
+    the queue is empty — nothing is held.</p>
+  {% endif %}
+</div>
+<div class="box" id="signal-class-status" data-coordinate="feature-area://helm">
+  <h3>Signal-class status</h3>
+  <div class="chip-row" style="display:flex;gap:10px;flex-wrap:wrap">
+    {%- for feed in ctx.feeds %}
+    <span class="badge" data-coordinate="feature-area://{{ feed.component }}">{{ feed.name }}
+      {%- if feed.online %} <span class="verify-badge">{{ feed.status }}</span>
+      {%- else %} <span class="muted">component offline</span>{% endif %}</span>
+    {%- endfor %}
+  </div>
+</div>
+
+<div class="suggested-actions" data-coordinate="scenario://breaker/gate-hold">
+  <a class="btn btn-primary" href="/breaker">Review in breaker</a>
+  <a class="btn" href="/approval-detail">Walk the chain</a>
+  <a class="btn" href="/composed">Open composed view</a>
+</div>
+
+<div class="note" data-coordinate="feature-area://helm"><b>NOTE:</b> every console action
+  shown here is a documented OpenAPI call (<a href="/docs">/docs</a>) &mdash; there is no
+  privileged path outside the API.</div>
+{% endblock %}

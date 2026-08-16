@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% import "_components.html" as c %}
+{% block title %}NemoCity — sign in{% endblock %}
+{% block body_class %}page-login{% endblock %}
+{% block body %}
+<header class="topbar" data-coordinate="scenario://signet/oidc-login">
+  <span class="product-name">NemoCity</span>
+  <span class="theme-toggle">
+    <button data-t="light" onclick="setTheme('light')">light</button>
+    <button data-t="dark" onclick="setTheme('dark')">dark</button>
+    <button data-t="system" onclick="setTheme('system')">system</button>
+  </span>
+</header>
+<nav class="tabs" aria-disabled="true" data-coordinate="scenario://helm/shell-tabs">
+  <span class="disabled-tab muted">sign in to access the console</span>
+</nav>
+<main class="login-wrap">
+  <div style="text-align:center;max-width:640px;margin:3em auto 0">
+    <div style="text-transform:uppercase;letter-spacing:.14em;font-size:.72rem;color:var(--muted)">
+      nvidia spark hack &middot; seattle</div>
+    <h1 style="font-size:2rem;font-weight:800;margin:.3em 0 .2em">NemoCity</h1>
+    <p style="color:var(--muted);margin:0 0 1.2em">signals in &middot; gated effects out
+      &middot; every consequence traceable to its cause</p>
+    <div style="max-width:620px;margin:1.2em auto 0">
+      {{ c.stage_timeline(stages, "scenario://breaker/ledger-walk") }}
+      <div class="hero-marks" data-coordinate="feature-area://helm">
+        <div class="hero-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 13h6M9 17h6"/></svg>
+          <span class="eyebrow">docket</span></div>
+        <div class="hero-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+          <span class="eyebrow">breaker</span></div>
+        <div class="hero-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true"><path d="M12 3v3M5 8l2 2M19 8l-2 2M4 21a8 8 0 0 1 16 0z"/></svg>
+          <span class="eyebrow">siren</span></div>
+        <div class="hero-mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="eyebrow">blindspot</span></div>
+      </div>
+    </div>
+    <p class="hero-provenance" data-coordinate="scenario://helm/agent-drives">
+      {% if rungs.has_served %}
+      NemoClerk answered the last turn on <b>local NVIDIA silicon</b>:
+      {% if rungs.served.source == 'cache' %}
+        a <b>cached response</b>, replayed from disk on the <b>{{ rungs.served.tier }}</b> rung
+        &mdash; no silicon served this particular turn.
+      {% else %}
+        <b>{{ rungs.served.silicon }}</b>{% if rungs.served.model %} ({{ rungs.served.model }}){% endif %},
+        the <b>{{ rungs.served.tier }}</b> rung.
+      {% endif %}
+      {% else %}
+      NemoClerk's model ladder is <b>configured</b> with an <b>NVIDIA GB10 Grace Blackwell</b>
+      (DGX Spark) rung first and an <b>NVIDIA RTX 5090</b> rung held on standby
+      &mdash; but <b>no turn has served yet</b> on this run, so neither is
+      described as serving.
+      {% endif %}
+      Neither rung needs the internet. What served the last turn is named in the
+      rail header and written into that turn's ledger entry &mdash; the same
+      <code>served_source</code> <code>/healthz</code> and <code>/nemoclerk/runtime</code>
+      report, so the claim is checkable rather than decorative.
+    </p>
+  </div>
+  <div class="box" data-coordinate="scenario://signet/oidc-login">
+    <h3>Continue to NemoCity</h3>
+    {% if providers.oidc %}
+    <a class="oidc-btn enabled" href="/auth/oidc" data-coordinate="scenario://signet/oidc-login">
+      Continue with signet &middot; {{ providers.oidc_host }}
+      <span class="tag">OIDC &middot; PKCE S256</span></a>
+    {% endif %}
+    {% if providers.github %}
+    <a class="oidc-btn enabled" href="/auth/github" data-coordinate="scenario://signet/oidc-login">
+      Continue with GitHub <span class="tag">minimal-build-first</span></a>
+    {% endif %}
+    {% if not providers.oidc and not providers.github %}
+    <span class="oidc-btn grayed" data-coordinate="scenario://signet/oidc-login">
+      No identity provider configured <span class="tag">refused</span></span>
+    {% endif %}
+  </div>
+  {% if providers.error %}
+  <div class="note" data-coordinate="scenario://signet/oidc-login">
+    <b>SIGN-IN DID NOT COMPLETE:</b> {{ providers.error }}
+  </div>
+  {% endif %}
+  {% if providers.oidc %}
+  <div class="note" data-coordinate="scenario://signet/oidc-login">
+    <b>SIGNET &middot; {{ providers.oidc_host }}:</b> authorization code with PKCE (S256).
+    The ID token is verified against <code>{{ providers.oidc_issuer }}</code>'s published
+    signing keys &mdash; signature, issuer, audience, expiry and nonce &mdash; before any
+    session exists. The <b>subject</b> that comes back and the <b>issuer</b> that vouched
+    for it are both written into every approval record and its ledger entry. Your role
+    still comes from signet's own table: authenticating says who you are, never what you
+    may do.
+  </div>
+  {% endif %}
+  {% if providers.mock_reason and providers.github %}
+  <div class="note" data-coordinate="scenario://signet/oidc-login">
+    <b>GITHUB IDENTITY:</b> {{ providers.mock_reason }} There is no mock/dev sign-in
+    on this deployment, so the only way in is a personal GitHub account. That is a
+    <b>real</b> identity, and GitHub is named as the issuer on every approval record
+    it signs &mdash; but it is a personal credential, not an enterprise IdP: your
+    organisation cannot attest to it and cannot deprovision it.
+  </div>
+  {% elif providers.mock_reason %}
+  <div class="note" data-coordinate="scenario://signet/oidc-login">
+    <b>NO SIGN-IN AVAILABLE:</b> {{ providers.mock_reason }} There is no mock/dev
+    sign-in on this deployment and no other provider is configured, so no session
+    can be established here.
+  </div>
+  {% endif %}
+</main>
+<footer class="coord">scenario://signet/oidc-login</footer>
+{% endblock %}

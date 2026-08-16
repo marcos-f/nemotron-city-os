@@ -1,0 +1,34 @@
+{
+  "component": "docket",
+  "phase": "done",
+  "criteria": {
+    "test://docket/quote-verbatim": "pass",
+    "test://docket/uncited-rejected": "pass",
+    "test://docket/abstain-thin-evidence": "pass",
+    "test://docket/route-ledgered": "pass"
+  },
+  "subgoal": "SG5",
+  "blockers": [
+    "SG3 real judgments are LIVE on the workstation demo path but the `real-judgments` CI stage still does not run: NVIDIA_API_KEY is not defined as a CI variable at project or group tier (checked 2026-08-16T08:05Z with `glab variable list` at both tiers, both empty). The stage is deliberately written to be absent rather than to fall back to fixtures, so the real path is proven by the cached responses committed under data/cache/ and by the running service, not by a green CI job. To close it: add NVIDIA_API_KEY as a masked CI variable — no code change."
+  ],
+  "notes": "Service running on :8601 against the REAL throughline substrate, with REAL hosted judgments. /healthz reports judgment_source=hosted, judgment_model=nvidia/nemotron-3-super-120b-a12b, substrate=real, mock=false. An earlier revision of this file said the judgment source was MOCK and blamed an age-recipient entitlement on the shared secret store; that blocker is withdrawn — the workstation now decrypts .secrets/nvidia-env.yaml with sops, the key exports, and judgments run. The quote validator is deterministic and model-free by design: digit-group spaces normalize outside quotation marks only, so text the source itself quoted is never rewritten to make a match succeed. An uncited judgment is regenerated once and then abstained on — the rejected finding is discarded, never republished at lower confidence. The same validator judges the hosted model that judges the mock; the real model is not given an easier bar.",
+  "updated_utc": "2026-08-16T08:22:00Z",
+  "evidence": {
+    "unit": "CI job 5152421 (pipeline (internal), merged as 12df272): named acceptance 69 run / 0 skipped, full suite 106 run / 0 skipped / 0 failed, coverage 95% measured in CI against a failable --cov-fail-under=70. The 5 real-substrate tests are owned by the integration stage (--no-skips) rather than skipping here. Locally with the substrate up: 111 run, 0 skipped, 98% coverage.",
+    "static": "CI job 5152416 PASS: yamllint -d relaxed, openapi-spec-validator, ultra-gate 01/02/03, check-wireframes, JSON well-formedness.",
+    "api": "8 declared contract paths, all served by the running app; /docs and /openapi.json 200; conformance asserted in tests/test_api_contract.py",
+    "int": "int+ now runs INSIDE CI: job 5152656 (pipeline (internal)) clones throughline over HTTPS with the runner's CA, boots it, and routes a real effect through it — 5 run, 0 skipped, 0 failed, asserted with --no-skips so it cannot pass by skipping. Previously verified by hand against the live substrate on :8600: cause walk effect(134) -> judgment(133) -> signal(19), all hops verified, ledger valid over 137 entries. The earlier 403 (throughline's job-token allowlist did not admit docket) is resolved; the integration job is no longer allow_failure.",
+    "bvt": "CI job 5152419 (distinct bvt stage) PASS: pristine `git archive` source, clean venv, install from pyproject, real uvicorn boot, 8 declared contract paths all served, judge->route 202, abstention refused 409, uncited judgment rejected — all offline from data/permits.json.",
+    "corpus": "500 permits from Socrata 76t5-zqzr cached to data/permits.json; 31 empty descriptions feed the abstention path with real inputs",
+    "live": "REAL hosted judgments, 2026-08-16: `scripts/judge-live.py --limit 12` against nvidia/nemotron-3-super-120b-a12b returned 6 accepted / 6 abstained / 0 uncited / 0 regenerated, and cached 7 hosted responses to data/cache/ (committed, so the demo replays offline with no key present). Accepted with verbatim quotes: 7110794-CN conf 0.95, 7111162-CN 0.98, 7112375-CN 0.96, 7155906-RR 0.98, 7155940-DM 0.98, 7156056-RR 0.95. Abstentions were honest, not swallowed: 7110807-CN model-declined; 7110791-EX, 7111728-EX, 7112918-CN, 7155719-CN, 7155836-CN abstained judge-unavailable because the hosted model did not return parseable JSON. Also exercised through the running service: POST /permits/7110807-CN/judge returned mock=false, model=nvidia/nemotron-3-super-120b-a12b, abstained=true, abstain_reason=model-declined.",
+    "pipeline": "https://git.nemotron.example.com/nvidia-hackathon/nemo-nvidia-demo/docket/-/pipelines/880509 — success. validate/unit/bvt green and required; integration allow_failure pending the one-command sibling allowlist entry in blockers.",
+    "mrs": "!3 merged to main as 12df272 (pipeline (internal) green for head SHA 39870000 BEFORE merge, not after).",
+    "mock_history": "The earlier SG3 blocker concluded this workstation could not decrypt the secret store and therefore could not reach the model. Both halves are now false and were checked before this file was rewritten: in ~/source/git.infra/shared-secrets, sops -d --extract on the env.NVIDIA_API_KEY path of .secrets/nvidia-env.yaml exits 0 and yields the key, and the judgments above ran with it. (Written without embedded quote characters on purpose: scripts/build-status interpolates this file into a Python triple-quoted string, which unescapes backslash-quotes and would corrupt the JSON.)"
+  },
+  "known_limitations": [
+    "SMC Title 23 grounding descoped (F5 bot wall, verified 2026-08-15). docket quotes the permit record itself, never the municipal code.",
+    "No embedding index is built; the corpus is small enough to serve directly, so llama-nemotron-embed-1b-v2 (dim 2048) is configured but unused.",
+    "The hosted model is not reliably parseable. In the 12-permit live run, 5 of 12 responses from nvidia/nemotron-3-super-120b-a12b were not valid JSON and docket abstained on them rather than guessing at the content. That is the designed behaviour and it is also a real ceiling on yield: roughly half the corpus judges on any given pass.",
+    "The demo path replays from data/cache/. Seven hosted responses are committed so the demo runs offline; a permit outside that set needs a live key to judge."
+  ]
+}

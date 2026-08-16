@@ -1,0 +1,101 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block main %}
+<h1>{{ ctx.page.h1 }}</h1>
+{{ c.stage_timeline(ctx.stages, "scenario://docket/route-ledger") }}
+
+{% if not ctx.services.docket.online %}
+{{ c.offline_pane("docket", 8601, ctx.services.docket.detail, reason="unreachable") }}
+{% else %}
+<div class="box" id="event-summary" data-coordinate="scenario://docket/judgment-quote">
+  <h3>Selected event &mdash; {{ ctx.permit.permitnum }}</h3>
+  <blockquote data-coordinate="scenario://docket/judgment-quote">&ldquo;{{ ctx.permit.description }}&rdquo;</blockquote>
+  <dl>
+    <dt>class</dt><dd>{{ ctx.permit.permitclass }}</dd>
+    <dt>type</dt><dd>{{ ctx.permit.permittypedesc }}</dd>
+    <dt>citations</dt><dd>permitnum: {{ ctx.permit.permitnum }}; field: description</dd>
+    <dt>source</dt><dd>docket :8601 &middot; Socrata 76t5-zqzr snapshot ({{ ctx.docket_total }} permits)</dd>
+    <dt>judgment source</dt><dd>{{ ctx.docket_mode }}</dd>
+  </dl>
+</div>
+{% endif %}
+
+<div class="suggested-actions" data-coordinate="scenario://docket/route-ledger">
+  <a class="btn btn-primary" href="/console">Accept route</a>
+  <a class="btn" href="/composed">Override</a>
+  <a class="btn" href="#abstention">View abstention</a>
+</div>
+
+<div class="chart-toggle" data-coordinate="scenario://docket/route-ledger">
+  <button aria-selected="true">illustration</button>
+  <button aria-selected="false">throughput chart</button>
+</div>
+<div class="visual-region" id="docket-illustration" data-coordinate="feature-area://docket">
+  <svg width="100%" height="150" viewBox="0 0 480 150" role="img"
+       aria-label="document flows to a routing desk">
+    <rect x="10" y="35" width="70" height="90" rx="4" fill="none" stroke="var(--line)" stroke-width="2"/>
+    <line x1="24" y1="55" x2="66" y2="55" stroke="var(--line)"/>
+    <line x1="24" y1="70" x2="66" y2="70" stroke="var(--line)"/>
+    <line x1="24" y1="85" x2="50" y2="85" stroke="var(--line)"/>
+    <text x="45" y="140" font-size="11" text-anchor="middle" fill="var(--muted)">permit</text>
+    <text x="140" y="90" font-size="34" text-anchor="middle" fill="var(--accent)">&#8220;</text>
+    <text x="140" y="140" font-size="11" text-anchor="middle" fill="var(--muted)">quoted, not paraphrased</text>
+    <line x1="90" y1="80" x2="360" y2="80" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)"/>
+    <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 z" fill="var(--accent)"/></marker></defs>
+    <rect x="370" y="30" width="100" height="100" rx="4" fill="none" stroke="var(--line)" stroke-width="2"/>
+    <circle cx="420" cy="55" r="10" fill="none" stroke="var(--line)" stroke-width="2"/>
+    <line x1="400" y1="90" x2="440" y2="90" stroke="var(--line)"/>
+    <line x1="400" y1="105" x2="440" y2="105" stroke="var(--line)"/>
+    <text x="420" y="146" font-size="11" text-anchor="middle" fill="var(--muted)">desk</text>
+  </svg>
+</div>
+<div class="visual-region" id="docket-throughput" data-coordinate="scenario://docket/route-ledger"
+     style="display:none">
+  <svg viewBox="0 0 560 260" width="100%" style="max-width:560px" role="img"
+       aria-label="Permits judged per hour, routed versus abstained, against reviewer capacity">
+    <text x="0" y="14" font-size="13" fill="var(--ink)" font-weight="700">Permits judged per hour</text>
+    <text x="0" y="30" font-size="11" fill="var(--muted)">routed vs abstained &middot; 08:00&ndash;15:00</text>
+    <g stroke="var(--line)" stroke-width=".5" opacity=".5">
+      <line x1="46" y1="60" x2="548" y2="60"/><line x1="46" y1="104" x2="548" y2="104"/>
+      <line x1="46" y1="148" x2="548" y2="148"/><line x1="46" y1="192" x2="548" y2="192"/></g>
+    <line x1="46" y1="216" x2="548" y2="216" stroke="var(--line)" stroke-width="1.5"/>
+    <line x1="46" y1="52" x2="46" y2="216" stroke="var(--line)" stroke-width="1.5"/>
+    <g font-size="11" fill="var(--muted)" text-anchor="end">
+      <text x="40" y="64">60</text><text x="40" y="108">45</text><text x="40" y="152">30</text>
+      <text x="40" y="196">15</text><text x="40" y="220">0</text></g>
+    <text x="14" y="140" font-size="11" fill="var(--muted)" transform="rotate(-90 14 140)"
+          letter-spacing="1">PERMITS / HR</text>
+    <g>
+      <rect x="64" y="146" width="34" height="70" fill="var(--accent)"/><rect x="64" y="128" width="34" height="18" fill="var(--muted)" opacity=".55"/>
+      <rect x="132" y="122" width="34" height="94" fill="var(--accent)"/><rect x="132" y="110" width="34" height="12" fill="var(--muted)" opacity=".55"/>
+      <rect x="200" y="98" width="34" height="118" fill="var(--accent)"/><rect x="200" y="80" width="34" height="18" fill="var(--muted)" opacity=".55"/>
+      <rect x="268" y="86" width="34" height="130" fill="var(--accent)"/><rect x="268" y="62" width="34" height="24" fill="var(--muted)" opacity=".55"/>
+      <rect x="336" y="110" width="34" height="106" fill="var(--accent)"/><rect x="336" y="98" width="34" height="12" fill="var(--muted)" opacity=".55"/>
+      <rect x="404" y="134" width="34" height="82" fill="var(--accent)"/><rect x="404" y="120" width="34" height="14" fill="var(--muted)" opacity=".55"/>
+      <rect x="472" y="120" width="34" height="96" fill="var(--accent)"/><rect x="472" y="102" width="34" height="18" fill="var(--muted)" opacity=".55"/>
+    </g>
+    <line x1="46" y1="104" x2="548" y2="104" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="548" y="99" text-anchor="end" font-size="11" fill="var(--amber-text)" font-weight="600">reviewer capacity 45/hr</text>
+    <g font-size="11" fill="var(--muted)" text-anchor="middle">
+      <text x="81" y="232">08</text><text x="149" y="232">09</text><text x="217" y="232">10</text>
+      <text x="285" y="232">11</text><text x="353" y="232">12</text><text x="421" y="232">13</text>
+      <text x="489" y="232">14</text></g>
+    <g transform="translate(46,250)" font-size="11">
+      <rect x="0" y="-8" width="10" height="10" fill="var(--accent)"/><text x="16" y="1" fill="var(--muted)">routed</text>
+      <rect x="72" y="-8" width="10" height="10" fill="var(--muted)" opacity=".55"/><text x="88" y="1" fill="var(--muted)">abstained (needs a human)</text>
+    </g>
+  </svg>
+</div>
+
+<div class="box muted" id="abstention" data-coordinate="scenario://docket/abstention">
+  <h3>Judgment card &mdash; abstention</h3>
+  <p><i>insufficient evidence &mdash; description empty; no route proposed</i></p>
+  <dl><dt>confidence</dt><dd>&mdash;</dd><dt>route proposal</dt><dd>none</dd>
+    <dt>citations</dt><dd>field: description (empty)</dd></dl>
+</div>
+<div class="note" id="route-ledger-note" data-coordinate="scenario://docket/route-ledger">
+  <b>NOTE:</b> routing is reversible &rarr; it executes without approval, but every route
+  decision (accepted or overridden) is still written to the ledger and hash-chained like
+  any other effect.</div>
+{% endblock %}

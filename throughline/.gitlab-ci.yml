@@ -1,0 +1,91 @@
+image: python:3.14-slim
+
+stages:
+  - test
+  - verify
+
+validate:
+  stage: test
+  script:
+    - pip install --quiet yamllint openapi-spec-validator PyYAML
+    - yamllint -d relaxed .
+    - python -m openapi_spec_validator contracts/openapi.yaml
+    - python3 -m json.tool mcp/tools.json >/dev/null
+    - python3 scripts/run-ultra-gate.py 01 02 03
+    - |
+      python3 - <<'PY'
+      import os,re
+      from html.parser import HTMLParser
+      W='.viper-context/specs/v0.1.0/ux/web/wireframes'
+      class P(HTMLParser):
+          def error(self,m): raise SystemExit(f'HTML parse error: {m}')
+      n=0
+      for f in sorted(os.listdir(W)):
+          if not f.endswith('.html'): continue
+          t=open(f'{W}/{f}').read(); p=P(); p.feed(t); p.close(); n+=1
+          for h in re.findall(r'href="([^"#]+)"', t):
+              if not h.startswith(('http','mailto')) and not os.path.exists(f'{W}/{h}'):
+                  raise SystemExit(f'{f}: broken link {h}')
+      assert n>=1, f'expected >=1 wireframe pages, found {n}'
+      print(f'wireframes OK: {n} pages parse, links resolve')
+      PY
+
+readiness-matrix:
+  stage: test
+  # Gates SCHEMA VALIDITY and EVIDENCE-POINTER RESOLVABILITY. It does NOT gate
+  # on cell content: `partial`, `present`, `hidden` and `unknown` are correct
+  # answers and this job stays green on all of them. A pipeline that went red
+  # because the matrix admitted a gap would be deleted by the first person
+  # under deadline, and the matrix would start lying instead.
+  script:
+    - pip install --quiet jsonschema
+    - python3 readiness/validate.py
+
+contract-drift:
+  stage: test
+  # Fails if a route is served but undocumented, OR documented but unserved.
+  # The existing contract tests only check one of those directions.
+  script:
+    - pip install --quiet -e ".[test]"
+    - THROUGHLINE_DATA_DIR="$(mktemp -d)" python3 scripts/check-contract-drift.py
+    - THROUGHLINE_DATA_DIR="$(mktemp -d)" python3 -m throughline.cli dataset validate
+
+unit:
+  stage: test
+  script:
+    - pip install --quiet -e ".[test]"
+    - >-
+      python -m pytest tests
+      --cov=throughline --cov-report=term-missing --cov-report=xml
+      --cov-fail-under=80
+      --junitxml=report.xml -p no:warnings
+  coverage: '/^TOTAL.+?(\d+\%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+bvt:
+  stage: verify
+  # Distinct from `unit`: a CLEAN venv, an install from pyproject only, a real
+  # boot, every contract path over HTTP. Proves the build, not the dev shell.
+  script:
+    - bash scripts/bvt.sh
+
+package:
+  stage: verify
+  # Publishes an installable wheel as a job artifact so sibling components can
+  # integrate against REAL throughline in their own pipelines. They fetch it
+  # with `needs: project:` — the runner does that download, which keeps them off
+  # the API's TLS chain (the slim images have no update-ca-certificates).
+  script:
+    - pip install --quiet build
+    - python -m build --wheel
+    - ls -l dist
+  artifacts:
+    paths:
+      - dist/*.whl
+    expire_in: 1 week

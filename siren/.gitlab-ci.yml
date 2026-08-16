@@ -1,0 +1,152 @@
+image: python:3.14-slim
+
+stages:
+  - test
+  - verify
+
+# siren imports throughline's dataset registry loader (throughline/datasets.py)
+# rather than reimplementing it, so throughline is a real dependency and every
+# job that imports siren needs it installed. It is not on PyPI: it is fetched
+# from the sibling repository with scripts/fetch-throughline.sh — docket's
+# fetch-substrate.sh, reused, with siren already on throughline's job-token
+# allowlist. The clone route is used rather than the wheel artifact because the
+# registry has not landed on throughline's main yet (throughline!16) and only
+# a clone can name the branch that carries it; the script says so in the log.
+.needs-throughline:
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git >/dev/null
+    - bash scripts/fetch-throughline.sh /tmp/throughline
+    - pip install --quiet /tmp/throughline
+
+readiness-matrix:
+  stage: test
+  # Gates readiness/matrix.json on STRUCTURE ONLY: schema validity, parent and
+  # dimension-key resolution, and evidence-pointer resolvability. It has no
+  # opinion on cell content.
+  #
+  # That restraint is the point, not an omission. The matrix's whole value is
+  # that it can say `unknown` and `hidden` out loud; a job that went red on
+  # those states would teach the next author to launder them into `partial`,
+  # and the document would start lying precisely where it is most useful. The
+  # state distribution is PRINTED by the validator and gated by nobody.
+  #
+  # Needs no throughline and no service: it reads two files off disk.
+  script:
+    - pip install --quiet jsonschema
+    - python3 readiness/validate.py
+
+validate:
+  stage: test
+  script:
+    - pip install --quiet yamllint openapi-spec-validator PyYAML
+    - yamllint -d relaxed .
+    - python -m openapi_spec_validator contracts/openapi.yaml
+    - python3 -m json.tool mcp/tools.json >/dev/null
+    - python3 scripts/run-ultra-gate.py 01 02 03
+    - |
+      python3 - <<'PY'
+      import os, re
+      from html.parser import HTMLParser
+      W = '.viper-context/specs/v0.1.0/ux/web/wireframes'
+      # scoped repo: nav hrefs to sibling federation pages are expected
+      # external references (they live in the orchestrator's composed
+      # wireframe set), not broken links within this repo.
+      KNOWN_EXTERNAL = {
+          'docket.html', 'breaker.html', 'blindspot.html', 'composed.html',
+          'login.html', 'helm.html', 'approval-detail.html',
+      }
+      class P(HTMLParser):
+          def error(self, m): raise SystemExit(f'HTML parse error: {m}')
+      n = 0
+      for f in sorted(os.listdir(W)):
+          if not f.endswith('.html'):
+              continue
+          t = open(f'{W}/{f}').read()
+          p = P(); p.feed(t); p.close()
+          n += 1
+          for h in re.findall(r'href="([^"#]+)"', t):
+              if h.startswith(('http', 'mailto')) or h in KNOWN_EXTERNAL:
+                  continue
+              if not os.path.exists(f'{W}/{h}'):
+                  raise SystemExit(f'{f}: broken link {h}')
+      assert n >= 1, f'expected >=1 wireframe page, found {n}'
+      print(f'wireframes OK: {n} pages parse, links resolve')
+      PY
+
+contract-drift:
+  extends: .needs-throughline
+  stage: test
+  # Fails if a route is served but undocumented, OR documented but unserved.
+  # tests/test_api_contract.py only checks one of those directions.
+  # OFFLINE_MODE=1 because importing the app boots the feed: the drift check
+  # must not depend on data.seattle.gov being reachable.
+  variables:
+    OFFLINE_MODE: "1"
+    SIREN_SUBSTRATE: mock
+  script:
+    - pip install --quiet -e ".[test]"
+    - SIREN_DATA_DIR="$(mktemp -d)" python3 scripts/check-contract-drift.py
+    - SIREN_DATA_DIR="$(mktemp -d)" python3 -m siren.cli datasets validate
+
+unit:
+  extends: .needs-throughline
+  stage: test
+  script:
+    - pip install --quiet -e ".[test]"
+    - >-
+      python -m pytest tests
+      --cov=siren --cov-report=term-missing --cov-report=xml
+      --cov-fail-under=70
+      --junitxml=report.xml -p no:warnings
+  coverage: '/^TOTAL.+?(\d+\%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+bvt:
+  extends: .needs-throughline
+  stage: verify
+  # Distinct from `unit`: a CLEAN venv, an install from pyproject only, a real
+  # boot, every contract path over HTTP. Proves the build, not the dev shell.
+  # Runs OFFLINE_MODE=1, so CI needs no route to data.seattle.gov.
+  # throughline goes into the clean venv BEFORE siren, so the wheel's declared
+  # dependency is satisfied without reaching for an index that has never heard
+  # of it. bvt.sh also exercises the installed `siren datasets` console script.
+  script:
+    - bash scripts/bvt.sh
+
+clean-env:
+  stage: verify
+  # A green suite that cannot boot the service is a false green, and this
+  # pipeline was exactly that: every job installed throughline in a
+  # before_script, so nothing ever asked what happens in an environment built
+  # only from what the package DECLARES. Meanwhile `throughline>=0.2` is
+  # satisfiable from PyPI by an unrelated project of the same name, so a venv
+  # could install cleanly and still fail at siren/service.py:15.
+  #
+  # This job builds the environment from nothing, the way the pyproject
+  # documents, and then asks the two questions the old pipeline never asked:
+  # does the suite COLLECT, and does the app IMPORT.
+  variables:
+    OFFLINE_MODE: "1"
+    SIREN_SUBSTRATE: mock
+  script:
+    - apt-get update -qq && apt-get install -y -qq git >/dev/null
+    - python3 -m venv /tmp/clean
+    - /tmp/clean/bin/pip install --quiet --upgrade pip
+    - bash scripts/fetch-throughline.sh /tmp/tl
+    - /tmp/clean/bin/pip install --quiet /tmp/tl
+    - /tmp/clean/bin/pip install --quiet -e ".[test]"
+    # A collection error exits nonzero and fails the job here, where the
+    # message is readable, instead of at boot where it is a health timeout.
+    - SIREN_DATA_DIR="$(mktemp -d)" /tmp/clean/bin/python -m pytest --collect-only -q > /tmp/collected.txt
+    - tail -3 /tmp/collected.txt
+    - >-
+      SIREN_DATA_DIR="$(mktemp -d)" /tmp/clean/bin/python -c
+      "from siren.service import create_app; create_app();
+      print('siren imports and builds its app in a clean environment')"
+    - /tmp/clean/bin/python -m pytest tests/test_declared_dependencies.py -q

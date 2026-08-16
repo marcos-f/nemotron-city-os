@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{#
+  warrant — a dataset's people, and the chain of authority behind each one.
+
+  Three rules are enforced by this markup, not by prose elsewhere:
+
+  1. UNKNOWN never renders as empty. If the substrate is unreachable or the
+     chain does not verify, this page says so and shows no table at all —
+     because an empty table reads as "nobody has access", which would be a
+     claim we cannot support.
+  2. A delegate or break-glass holder is never shown as the owner. Every row
+     carries its SOURCE and its chain.
+  3. An active break-glass window is announced at the top of the page and
+     cannot be dismissed.
+#}
+{% block title %}{{ dataset_id }} — people · helm{% endblock %}
+{% block body_class %}page-warrant{% endblock %}
+
+{% block body %}
+<main class="warrant" data-coordinate="use-case://warrant/own-dataset">
+
+  <header class="warrant-head">
+    <p class="warrant-crumb"><a href="/">helm</a> / datasets / {{ dataset_id }}</p>
+    <h1>Who may do what to <code>{{ dataset_id }}</code></h1>
+    <p class="warrant-sub">
+      The identity provider says who you are. This page says what you may do
+      here — and every line of it is read back from throughline's hash chain,
+      not from a table anyone edits.
+    </p>
+  </header>
+
+  {% if not a.known %}
+  {#
+    The whole point. No table, no zero, no green tick — a named unknown.
+  #}
+  <section class="warrant-unknown" data-state="unknown"
+           data-coordinate="test://warrant/unknown-not-denial">
+    <h2>Unknown</h2>
+    <p class="warrant-unknown-lede">{{ a.message_ui }}</p>
+    <dl class="warrant-kv">
+      <dt>reason</dt><dd><code>{{ a.reason }}</code></dd>
+      <dt>detail</dt><dd>{{ a.detail }}</dd>
+      <dt>substrate</dt><dd>{{ a.substrate }}</dd>
+      {% if a.chain_valid is not none %}
+      <dt>chain verifies</dt><dd>{{ a.chain_valid }}</dd>
+      {% endif %}
+    </dl>
+    <p class="warrant-note">
+      This is <strong>not</strong> a statement that nobody has access. It is a
+      statement that we could not find out. No permission decision should be
+      made from this screen while it says this.
+    </p>
+  </section>
+
+  {% else %}
+
+  {% if a.breakglass_active %}
+  {% for w in a.breakglass_active %}
+  <section class="warrant-breakglass" role="alert" data-state="breakglass-open">
+    <h2>Break-glass is OPEN on this dataset</h2>
+    <p>
+      <strong>{{ w.requester }}</strong> holds administrative access until
+      <time datetime="{{ w.expires_at }}">{{ w.expires_at }}</time>
+      ({{ (w.seconds_remaining // 60) if w.seconds_remaining is not none else '?' }} minutes left).
+      They are <em>not</em> an administrator of this dataset.
+    </p>
+    <p class="warrant-note">Reason given: {{ w.reason }}</p>
+    <p class="warrant-note">
+      Opened on the vote of
+      {% for v in w.votes %}<code>{{ v.voter }}</code> (administers {{ v.dataset }}){% if not loop.last %}, {% endif %}{% endfor %}.
+      Entry and exit are both on the chain.
+    </p>
+    <form method="post" action="/datasets/{{ dataset_id }}/breakglass/{{ w.id }}/exit">
+      <button type="submit" class="warrant-close">Close this window now</button>
+    </form>
+  </section>
+  {% endfor %}
+  {% endif %}
+
+  {% if not a.claimed %}
+  <section class="warrant-unclaimed" data-state="unclaimed">
+    <h2>No administrator</h2>
+    <p>
+      Nobody has onboarded <code>{{ dataset_id }}</code>. This is a
+      <strong>known</strong> empty — the chain was read and it says so — which
+      is a different fact from the unknown above.
+    </p>
+    <p class="warrant-note">
+      Whoever onboards it becomes its first administrator, recorded with the
+      issuer that vouched for them.
+    </p>
+  </section>
+  {% else %}
+
+  <section class="warrant-people">
+    <h2>People</h2>
+    <p class="warrant-note">
+      {{ a.admin_count }} direct administrator{{ '' if a.admin_count == 1 else 's' }}.
+      {% if a.admin_count == 1 %}
+      The last one cannot be removed — <code>WARRANT-LAST-ADMIN</code> refuses it
+      and the refusal goes on the chain.
+      {% endif %}
+    </p>
+    <table class="warrant-table">
+      <thead>
+        <tr>
+          <th>subject</th><th>role</th><th>how</th><th>vouched by</th>
+          <th>expires</th><th>chain of authority</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in a.people %}
+        <tr data-source="{{ p.source }}">
+          <td>
+            <code>{{ p.subject }}</code>
+            {% if p.owner %}<span class="tag tag-owner">owner</span>{% endif %}
+          </td>
+          <td>{{ p.role }}</td>
+          <td>
+            <span class="tag tag-{{ p.source }}">{{ p.source }}</span>
+            <span class="warrant-note">{{ p.source_blurb }}</span>
+            {% if p.via %}<br><span class="warrant-note">via {{ p.via }}</span>{% endif %}
+          </td>
+          <td>
+            {#- An issuer read off the chain is what the RECORD SAYS, not what
+                warrant verified. It is still shown — hiding it would hide the
+                thing a reviewer needs to see — but it is shown as a claim,
+                and the verdict beside it has three states rather than two. -#}
+            {% if p.issuer %}<code>{{ p.issuer }}</code>
+              {% if p.identity_source == 'record' %}<span class="warrant-note">claimed by the record</span>{% endif %}
+            {% else %}<span class="warrant-note">not recorded</span>{% endif %}
+            {% if p.identity_assurance == 'unverified' %}
+            <span class="tag tag-unverified">unverified identity ({{ p.auth_mode or 'unknown' }})</span>
+            {% elif p.identity_assurance == 'unknown' %}
+            <span class="tag tag-unknown" title="{{ p.identity_assurance_blurb }}">verification unknown</span>
+            {% elif p.identity_assurance is not defined and p.verified_identity is defined and not p.verified_identity %}
+            {#- A record from before this field existed: fall through to the
+                cautious rendering, never to the confident one. -#}
+            <span class="tag tag-unverified">unverified identity ({{ p.auth_mode or 'unknown' }})</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.expires_at %}
+            <time datetime="{{ p.expires_at }}">{{ p.expires_at }}</time>
+            {% if p.seconds_remaining is not none and p.seconds_remaining < 86400 %}
+            <span class="tag tag-expiring">expiring</span>
+            {% endif %}
+            {% else %}<span class="warrant-note">does not expire</span>{% endif %}
+          </td>
+          <td>
+            <ol class="warrant-chain">
+              {% for hop in p.chain %}
+              <li>
+                <code>{{ hop.event }}</code> — {{ hop.subject }}
+                <span class="warrant-note">by {{ hop.by }}</span>
+                {% if hop.seq %}<span class="warrant-note">(ledger #{{ hop.seq }})</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ol>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="warrant-delegations">
+    <h2>Delegations</h2>
+    {% if a.delegations %}
+    <table class="warrant-table">
+      <thead><tr><th>to</th><th>role</th><th>by</th><th>expires</th><th>state</th></tr></thead>
+      <tbody>
+      {% for d in a.delegations %}
+        <tr>
+          <td><code>{{ d.subject }}</code></td>
+          <td>{{ d.role }}</td>
+          <td><code>{{ d.granted_by }}</code></td>
+          <td><time datetime="{{ d.expires_at }}">{{ d.expires_at }}</time></td>
+          <td>
+            {% if d.ended %}{{ d.ended }}{% if d.ended_reason %} — {{ d.ended_reason }}{% endif %}
+            {% elif d.active %}active,
+              {{ (d.seconds_remaining // 60) if d.seconds_remaining is not none else '?' }} minutes left
+            {% else %}lapsed{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="warrant-note">
+      Delegated authority expires on the clock, whether or not anything runs to
+      end it — and it never satisfies the last-administrator guard. A bridge,
+      not a foundation.
+    </p>
+    {% else %}
+    <p class="warrant-note">No delegation has been made on this dataset.</p>
+    {% endif %}
+  </section>
+
+  {% if a.breakglass %}
+  <section class="warrant-breakglass-log">
+    <h2>Break-glass history</h2>
+    <table class="warrant-table">
+      <thead><tr><th>id</th><th>who asked</th><th>state</th><th>entered</th><th>exited</th><th>votes</th></tr></thead>
+      <tbody>
+      {% for w in a.breakglass %}
+        <tr>
+          <td><code>{{ w.id }}</code></td>
+          <td><code>{{ w.requester }}</code></td>
+          <td>{{ w.state }}{% if w.overdue %} <span class="tag tag-expiring">no exit recorded</span>{% endif %}</td>
+          <td>{{ w.entered_at or '—' }}</td>
+          <td>{{ w.exited_at or '—' }}{% if w.exit_reason %} ({{ w.exit_reason }}){% endif %}</td>
+          <td>{{ w.votes | length }} / {{ w.votes_needed }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if a.refusals %}
+  <section class="warrant-refusals">
+    <h2>Refusals on the record</h2>
+    <p class="warrant-note">
+      A refusal nobody wrote down is indistinguishable from one that never
+      happened. These are on the chain.
+    </p>
+    <ul>
+    {% for r in a.refusals %}
+      <li><code>{{ r.rule }}</code> — {{ r.actor }}: {{ r.detail or r.reason }}
+        {% if r.ledger_seq %}<span class="warrant-note">(ledger #{{ r.ledger_seq }})</span>{% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% endif %}{# claimed #}
+  {% endif %}{# known #}
+
+  <footer class="warrant-foot">
+    <p class="warrant-note">
+      You are <code>{{ viewer.subject or 'not signed in' }}</code>
+      {% if viewer.issuer %}, vouched by <code>{{ viewer.issuer }}</code>{% endif %}
+      {#- The viewer is the one identity warrant checked itself, so this is
+          the one place a `verified` verdict can be earned rather than read
+          off a record. -#}
+      {% if viewer.identity_assurance == 'unverified' %}
+      <span class="tag tag-unverified">unverified identity ({{ viewer.auth_mode }})</span>
+      {% elif viewer.identity_assurance == 'unknown' %}
+      <span class="tag tag-unknown" title="{{ viewer.identity_assurance_blurb }}">verification unknown</span>
+      {% elif viewer.identity_assurance is not defined and not viewer.verified_identity %}
+      <span class="tag tag-unverified">unverified identity ({{ viewer.auth_mode }})</span>
+      {% endif %}
+      — {{ 'you administer this dataset' if may_administer else 'you do not administer this dataset' }}.
+    </p>
+    <p class="warrant-note">
+      Roles here: {% for r in roles %}<code>{{ r.role }}</code> {{ r.may }}{% if not loop.last %} · {% endif %}{% endfor %}.
+      Break-glass quorum is drawn from administrators of other datasets and from
+      named <code>{{ global_role }}</code>s.
+    </p>
+    <p class="warrant-note">
+      Read as of {{ a.as_of }} · chain length {{ a.chain_length }} ·
+      the same answer is available at
+      <code>GET /datasets/{{ dataset_id }}/authority</code>, MCP
+      <code>dataset_authority</code>, and <code>helm dataset-authority</code>.
+    </p>
+  </footer>
+</main>
+{% endblock %}

@@ -1,0 +1,4 @@
+# Host-project gate parameters (metric criteria are host-parameterized).
+version: v0.1.0
+platform: web
+element_coverage_threshold: 0.9

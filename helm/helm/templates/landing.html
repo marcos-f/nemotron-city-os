@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}NemoCity — welcome{% endblock %}
+{% block body_class %}page-index{% endblock %}
+{% block body %}
+<header class="topbar"><span class="product-name">NemoCity</span></header>
+<main class="index-main">
+  <h1>NemoCity &mdash; an agentic console with a human-only gate on irreversible effects</h1>
+  <p class="muted">You are not signed in. Nothing on this page identifies you, and nothing
+    you can do from here reaches the approval path.</p>
+  <div class="box">
+    <h3>Two ways in</h3>
+    <p><a class="btn btn-primary" href="/guest">Continue as guest &mdash; read-only, no account</a>
+      &nbsp; see the real ledger, the real approval queue and real component status, exactly
+      as the public JSON API already serves it. Nothing can be approved, decided or released
+      from this view.</p>
+    <p style="margin-top:14px"><a class="btn" href="/login">Sign in</a> &nbsp; to approve or
+      reject a held effect, an OIDC- or GitHub-verified human identity is required. There is
+      no mock or one-click identity on this deployment.</p>
+  </div>
+  <p class="muted" style="margin-top:16px">Stuck, or want the whole API surface first?
+    <a href="/help">/help</a> &middot; <a href="/docs">/docs</a></p>
+</main>
+<footer class="coord">feature-area://helm</footer>
+{% endblock %}

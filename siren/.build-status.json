@@ -1,0 +1,24 @@
+{
+  "component": "siren",
+  "phase": "done",
+  "criteria": {
+    "test://siren/offline-complete": "pass",
+    "test://siren/atomic-reload-invalid-config": "pass",
+    "test://siren/hot-reload-no-redeploy": "pass"
+  },
+  "subgoal": "SG5",
+  "blockers": [],
+  "notes": "Running on :8603 against real throughline (:8600), serving the live Socrata kzjm-xkqj feed with snapshot fallback. Every acceptance criterion verified from a CLEAN CLONE of merged main at fec918d, not this session's working tree: 80 pytests green, coverage 93%, scripts/bvt.sh green, and the 4 real-substrate integration tests green against the running federation. The hot-reload beat and its refusal counter-beat were both exercised end to end through the service on the contract port. No blockers; nothing is waiting on a sibling.",
+  "updated_utc": "2026-08-16T04:05:50Z",
+  "evidence": {
+    "clean_clone": "independent verification from a fresh clone of main at fec918d: 80 passed, coverage 93.22% (--cov-fail-under=70 enforced and reached), scripts/bvt.sh green, openapi-spec-validator OK",
+    "static": "CI validate job green on merged main (pipeline (internal)): yamllint, openapi-spec-validator, mcp/tools.json parse, ultra gate 01-03, wireframe links",
+    "unit": "80 pytests green, coverage 93% on the siren package; --cov-fail-under=70 is measured in CI and failable. In CI the 4 integration tests skip (no substrate on the runner), leaving 76 green at 89%",
+    "api": "contracts/openapi.yaml validates; every contract path AND operation asserted implemented in both directions; scripts/smoke.py exercised all 10 paths plus /docs over HTTP against the service running on :8603",
+    "int": "tests/test_integration_throughline.py \u2014 4 passed against real throughline from the clean clone: class registered by the drop, throughline pid and boot_verification unchanged across it, signal.ingested entries carrying class=fire.incident, invalid variant refused BY throughline and ledgered (config.refused, rule dispatch_units), previous config still running, ledger verify valid",
+    "bvt": "distinct CI verify stage, green on merged main: clean venv, pristine source copy with data/ excluded, install from pyproject only, real boot on a free port, every contract path over HTTP, OFFLINE_MODE=1 \u2014 and the packaged seed snapshot served 40 incidents to prove a clean install needs no network",
+    "offline": "socket guard over connect/connect_ex/create_connection, armed across the full demo path; the guard is itself tested to bite",
+    "feed": "live poll serving 50 rows from data.seattle.gov/resource/kzjm-xkqj.json, no app token",
+    "live_service": "http://127.0.0.1:8603 \u2014 /healthz reports mode=live, substrate=real, reachable=true; hot-reload beat run through the service: validated -> registered -> flowing (3 signals), redeploy_required=false"
+  }
+}

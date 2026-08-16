@@ -1,0 +1,230 @@
+image: python:3.13-slim
+
+stages: [validate, test, integration, live, bvt]
+
+# docket imports throughline's dataset loader and its /datasets router, so the
+# substrate must be installed before docket is. This is the SAME mechanism the
+# int+ stage has always used — scripts/fetch-substrate.sh clones throughline
+# with CI_JOB_TOKEN over the internal CA, then pip installs it from source —
+# reused rather than replaced, because it is the route already proven green in
+# this pipeline and it needs no new credential. throughline also publishes a
+# wheel from its own `package` job; that would work too, but it would add a
+# cross-project artifact dependency where a working clone already exists.
+.with_substrate: &with_substrate
+  - apt-get update -qq && apt-get install -y -qq git >/dev/null
+  - bash scripts/fetch-substrate.sh /tmp/throughline
+  - pip install --quiet /tmp/throughline
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  MOCK_JUDGMENT: "1"
+  # TEMPORARY PIN, remove when throughline!16 merges.
+  #
+  # docket imports throughline's dataset loader and its /datasets router. That
+  # work is on throughline's feat/dataset-registry branch and has not landed on
+  # its main yet, so building against main would import a throughline that does
+  # not have throughline.datasets_api. Pinning is the honest way to say "we
+  # depend on unmerged sibling work"; the alternative — vendoring a copy of the
+  # loader — would give the federation two provenance vocabularies that drift.
+  #
+  # scripts/fetch-substrate.sh prints the ref it actually got, and falls back to
+  # the default branch, loudly, if the pinned ref has merged and been deleted.
+  SUBSTRATE_REF: "feat/dataset-registry"
+
+validate:
+  stage: validate
+  script:
+    - pip install --quiet yamllint openapi-spec-validator PyYAML
+    - yamllint -d relaxed .
+    - python -m openapi_spec_validator contracts/openapi.yaml
+    - python3 -m json.tool mcp/tools.json >/dev/null
+    - python3 -m json.tool data/fixtures/judgments.json >/dev/null
+    - python3 -m json.tool .build-status.json >/dev/null
+    - python3 scripts/run-ultra-gate.py 01 02 03
+    - python3 scripts/check-wireframes.py
+
+readiness-matrix:
+  stage: validate
+  # Gates the FORM of readiness/matrix.json, never its content.
+  #
+  # Two checks, both structural: does the document conform to the
+  # readiness-matrix JSON Schema, and does every evidence pointer in it resolve
+  # to something that actually exists in this repository. A pointer that parses
+  # is not a pointer that resolves, and a matrix full of well-formed references
+  # to files nobody wrote is the failure mode this job exists to catch.
+  #
+  # It does NOT gate on cell states. No state is required and none is
+  # forbidden: a document that says `unknown` everywhere passes. Gating on
+  # content would turn an honest `unknown` into a build failure and quietly
+  # pay authors to overclaim, which is the exact behaviour the eight-state
+  # vocabulary was designed to stop. Whether the states are RIGHT is a
+  # reviewer's judgement, not a pipeline's.
+  #
+  # The schema and the pointer checker are vendored under readiness/vendor/
+  # with their upstream sha256s recorded, because they live in a plugin cache
+  # that exists on a workstation and not in a CI container.
+  script:
+    - pip install --quiet jsonschema
+    - python3 readiness/check-schema.py
+    - python3 readiness/vendor/check-evidence --root . readiness/matrix.json
+
+unit:
+  stage: test
+  script:
+    - *with_substrate
+    - pip install --quiet -e ".[dev]"
+    # The named acceptance files run explicitly and must report a nonzero
+    # count: a suite that collected nothing is not a green suite.
+    #
+    # The real-substrate class is deselected here and owned exclusively by the
+    # integration stage. Leaving it in would report skips in a job that has no
+    # substrate to talk to, and a skip that looks routine is how an unproven
+    # criterion goes unnoticed. --no-skips is asserted where it belongs.
+    - >-
+      python -m pytest
+      tests/test_quote_validator.py
+      tests/test_abstention.py
+      tests/test_route_effect.py
+      -q -k "not RealThroughline" --junitxml=named-tests.xml
+    - >-
+      python3 scripts/assert_test_count.py named-tests.xml
+      --min 1 --no-skips --label "named acceptance"
+    # Full suite with the failable coverage floor.
+    - >-
+      python -m pytest --cov=docket --cov-report=term --cov-fail-under=70
+      -q -k "not RealThroughline" --junitxml=report.xml
+    - >-
+      python3 scripts/assert_test_count.py report.xml
+      --min 1 --no-skips --label "full suite"
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    paths:
+      - report.xml
+      - named-tests.xml
+
+contract-drift:
+  stage: test
+  # Fails if a route is served but undocumented, OR documented but unserved.
+  # Every pre-existing contract test in this repo checks one direction only
+  # (contract subset of implementation), so an undocumented surface could ship
+  # unnoticed. Undocumented routes may be waived explicitly, with a reason, in
+  # contracts/undocumented.yaml.
+  #
+  # Also validates the dataset registry itself from the CLI: a registry that
+  # omits a licence or a provenance fails the build here, before anything is
+  # served from it.
+  script:
+    - *with_substrate
+    - pip install --quiet -e ".[dev]"
+    - python3 scripts/check-contract-drift.py
+    - python3 -m docket.cli dataset validate
+
+integration:
+  stage: integration
+  # int+ — the route effect must be accepted by a REAL throughline, not a mock.
+  # The substrate is cloned and booted here so the criterion is discharged by
+  # the pipeline rather than by a developer's running laptop.
+  #
+  # REQUIRED. throughline's job-token allowlist now admits docket, so the
+  # pipeline clones the substrate, boots it, and routes a real effect through
+  # it. assert_test_count --no-skips means this cannot pass by skipping: if the
+  # substrate stops being reachable, the pipeline goes red rather than quiet.
+  variables:
+    DOCKET_REQUIRE_REAL_SUBSTRATE: "1"
+    THROUGHLINE_URL: "http://127.0.0.1:8600"
+    MOCK_THROUGHLINE: "0"
+  script:
+    - apt-get update -qq && apt-get install -y -qq git curl >/dev/null
+    - bash scripts/fetch-substrate.sh /tmp/throughline
+    - pip install --quiet /tmp/throughline
+    - pip install --quiet -e ".[dev]"
+    - cd /tmp/throughline && (python -m throughline >/tmp/throughline.log 2>&1 &) && cd -
+    - bash scripts/wait-for-substrate.sh
+    - python -m pytest tests/test_route_effect.py -q -k RealThroughline --junitxml=int.xml
+    - python3 scripts/assert_test_count.py int.xml --min 1 --no-skips --label "int+"
+  artifacts:
+    when: always
+    reports:
+      junit: int.xml
+
+real-judgments:
+  stage: live
+  # SG3 — the hosted nemotron-3-super path against the REAL model.
+  #
+  # Runs only when a NVIDIA_API_KEY CI variable exists, because a job that
+  # "passed" by falling back to fixtures would be worse than no job: it would
+  # look like proof of the real path. When the variable is absent the job does
+  # not run at all, and .build-status.json keeps saying so.
+  #
+  # To enable: add NVIDIA_API_KEY as a CI variable (Settings > CI/CD >
+  # Variables), masked so it never lands in a log.
+  #
+  # Mind the protected flag. `main` is this project's only protected branch, so
+  # a PROTECTED variable is exposed to main pipelines only — this job will then
+  # be absent from feature-branch MR pipelines, which is correct but looks like
+  # a missing job if you are not expecting it. An UNPROTECTED variable runs the
+  # job everywhere, including on merge requests from forks; prefer protected
+  # unless you specifically want pre-merge runs.
+  #
+  # Alternatively run scripts/judge-live.py locally with the key exported and
+  # commit data/cache/ — the cached responses then serve the demo offline with
+  # no key present at all.
+  rules:
+    - if: $NVIDIA_API_KEY
+      when: on_success
+    - when: never
+  variables:
+    MOCK_JUDGMENT: "0"
+  script:
+    - *with_substrate
+    - pip install --quiet -e ".[dev]"
+    - python3 scripts/judge-live.py --limit 12
+    # The same acceptance tests, now with the real client selected.
+    - python -m pytest tests/test_hosted_judge.py -q --junitxml=live.xml
+    - >-
+      python3 scripts/assert_test_count.py live.xml
+      --min 1 --no-skips --label "real judgments"
+  artifacts:
+    when: always
+    paths:
+      - data/cache/
+    reports:
+      junit: live.xml
+
+bvt:
+  stage: bvt
+  # Distinct from `unit`: clean venv, install from pyproject, real boot.
+  script:
+    - apt-get update -qq && apt-get install -y -qq curl git >/dev/null
+    - bash scripts/bvt.sh
+
+clean-env:
+  stage: bvt
+  # A green suite that cannot boot the service is a false green, and this
+  # pipeline was exactly that: every job installed the substrate in
+  # *with_substrate, so nothing ever asked what happens in an environment
+  # built only from what the package DECLARES. Meanwhile `throughline>=0.2` is
+  # satisfiable from PyPI by an unrelated project of the same name, so a venv
+  # could install cleanly and still fail at docket/app.py:8.
+  #
+  # This job builds the environment from nothing, the way the pyproject
+  # documents, and then asks the two questions the old pipeline never asked:
+  # does the suite COLLECT, and does the app IMPORT.
+  script:
+    - apt-get update -qq && apt-get install -y -qq git >/dev/null
+    - python3 -m venv /tmp/clean
+    - /tmp/clean/bin/pip install --quiet --upgrade pip
+    - bash scripts/fetch-substrate.sh /tmp/tl
+    - /tmp/clean/bin/pip install --quiet /tmp/tl
+    - /tmp/clean/bin/pip install --quiet -e ".[dev]"
+    # A collection error exits nonzero and fails the job here, where the
+    # message is readable, instead of at boot where it is a health timeout.
+    - /tmp/clean/bin/python -m pytest --collect-only -q > /tmp/collected.txt
+    - tail -3 /tmp/collected.txt
+    - >-
+      /tmp/clean/bin/python -c
+      "from docket.app import app; assert app.routes;
+      print('docket imports and builds its app in a clean environment')"
+    - /tmp/clean/bin/python -m pytest tests/test_declared_dependencies.py -q

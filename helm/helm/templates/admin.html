@@ -1,0 +1,144 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block left_rail %}
+<aside class="feeds" data-coordinate="feature-area://helm">
+  <div class="feeds-head">
+    <span class="eyebrow">Sections</span>
+    <button class="feeds-collapse" onclick="toggleFeeds()" title="collapse sections"
+            aria-expanded="true" aria-label="collapse sections">&#10216;</button>
+  </div>
+  <a class="rail-link" href="/console" style="display:block;margin-bottom:8px">&#8592; Return to console</a>
+  <nav aria-label="Admin sections">
+    <a href="#rbac" class="rail-link active">Users &amp; roles</a>
+    <a href="#classes" class="rail-link">Signal classes</a>
+    <a href="#gate" class="rail-link">Gate policy</a>
+    <a href="#auth" class="rail-link">Auth &amp; providers</a>
+  </nav>
+  <div class="note" style="font-size:.8em">NOTE: /admin requires the admin role &mdash;
+    operator, viewer and agent principals receive a plain-words 403.</div>
+</aside>
+{% endblock %}
+{% block main %}
+<div class="admin-backbar" style="display:flex;align-items:center;gap:12px;margin:0 0 24px">
+  <a class="btn btn-primary" href="/console" style="text-decoration:none">&#8592; Back to console</a>
+  <span class="muted" style="font-size:15px">Settings &middot; admin role</span>
+</div>
+<h1>{{ ctx.page.h1 }}</h1>
+
+<section class="card" id="rbac" data-coordinate="use-case://signet/bind-identity">
+  <h2>Users &amp; roles (RBAC)</h2>
+  <table><thead><tr><th>subject</th><th>provider</th><th>role</th><th>last seen</th><th></th></tr></thead>
+    <tbody>
+      {%- for row in ctx.roles %}
+      <tr>
+        <td>{{ row.subject }}</td><td>{{ row.provider }}</td>
+        <td>{% if row.role == 'admin' %}<b>{{ row.role }}</b>{% else %}{{ row.role }}{% endif %}
+          {%- if row.role == 'operator' %} (signet){% endif %}
+          {%- if row.role == 'agent' %} (never signet){% endif %}</td>
+        <td>{{ row.last_seen or '—' }}</td>
+        <td>
+          {%- if row.role == 'agent' %}<span class="muted">fixed</span>
+          {%- else %}
+          <form method="post" action="/admin/roles/form" style="display:inline-flex;gap:8px;align-items:center">
+            <input type="hidden" name="subject" value="{{ row.subject }}">
+            <select name="role" aria-label="role for {{ row.subject }}"
+                    style="height:32px;border-radius:6px;background:var(--soft);color:var(--ink);border:none">
+              {%- for option in ctx.role_options %}
+              <option value="{{ option }}"{% if option == row.role %} selected{% endif %}>{{ option }}</option>
+              {%- endfor %}
+            </select>
+            <button class="btn compact" type="submit">edit role</button>
+          </form>
+          {%- endif %}
+        </td>
+      </tr>
+      {%- endfor %}
+    </tbody></table>
+  {% if ctx.role_change %}
+  <div class="note arrival-banner">Role change recorded: <b>{{ ctx.role_change.subject }}</b>
+    {{ ctx.role_change.old_role }} &rarr; {{ ctx.role_change.new_role }}, by
+    {{ ctx.role_change.changed_by }}{% if ctx.role_change.ledger_seq %} &mdash; ledger seq
+    {{ ctx.role_change.ledger_seq }}{% endif %}.</div>
+  {% endif %}
+  <div class="note">NOTE: role edits are effects &mdash; ledgered like everything else,
+    with the editing admin's signet identity.</div>
+</section>
+
+<section class="card" id="classes" data-coordinate="scenario://siren/hot-reload">
+  <h2>Signal classes</h2>
+  <table><thead><tr><th>class</th><th>source</th><th>status</th><th></th></tr></thead><tbody>
+    {%- for cls in ctx.classes %}
+    <tr {% if cls.arrived %}class="arrival-flash" data-arrived="true"{% endif %}>
+      <td>{{ cls.name }}</td><td>{{ cls.source }}</td>
+      <td>{% if cls.online %}&#10003; {{ cls.status }}{% else %}<span class="muted">component offline</span>{% endif %}</td>
+      <td><button class="btn compact" type="button"
+                  onclick="hotReloadClass('{{ cls.name }}')"
+                  {% if not cls.reloadable %}disabled
+                  title="{{ cls.reload_note or (cls.owner ~ ' is not responding') }}"{% endif %}>reload</button>
+        {%- if not cls.reloadable %}<span class="muted" style="font-size:13px;display:block">
+          {{ cls.reload_note or (cls.owner ~ " is not responding") }}</span>{% endif %}</td>
+    </tr>
+    {%- endfor %}
+  </tbody></table>
+  {#- hotReloadClass() reports what it DID, and used to report it only to
+      the eye: the note was inserted straight into the table with nothing
+      to announce it. It is written here as well now — a region that
+      already exists at load, which is what a screen reader can watch.
+      Polite: the reload is the admin's own click, and the note says
+      whether it happened, which is information rather than an alarm. -#}
+  <div id="class-reload-result" role="status" aria-live="polite"
+       aria-atomic="true"></div>
+</section>
+
+<section class="card" id="substrate" data-coordinate="scenario://throughline/no-bypass">
+  <h2>Substrate health</h2>
+  {% if not ctx.substrate_alarms.known %}
+  <p><span class="badge" style="background:rgba(var(--danger-rgb),.16);color:var(--danger)">
+    unknown</span> throughline is not responding, so helm cannot report its
+    health. Reachable and healthy are different questions and this answers
+    neither.</p>
+  {% else %}
+  <p><span class="badge {{ 'verify-badge' if ctx.substrate_alarms.status == 'ok' and not ctx.substrate_alarms.alarms else 'hold-badge' }}">
+    {{ ctx.substrate_alarms.status }}</span>
+    {%- if ctx.substrate_alarms.alarms %}
+    standing alarms: {{ ctx.substrate_alarms.alarms|join(', ') }}
+    {%- else %} no standing alarms{% endif %}</p>
+  {% if ctx.substrate_alarms.allowlist %}
+  <p class="muted" style="font-size:15px">Config may only be loaded from:
+    {% for path in ctx.substrate_alarms.allowlist %}<span class="mono">{{ path }}</span>
+    {%- if not loop.last %}, {% endif %}{% endfor %}. A reload from anywhere
+    else is refused at the substrate.</p>
+  {% endif %}
+  {% endif %}
+</section>
+<section class="card" id="gate" data-coordinate="scenario://throughline/no-bypass">
+  <h2>Gate policy</h2>
+  <table><thead><tr><th>effect class</th><th>reversibility</th><th>approval</th></tr></thead><tbody>
+    {%- for rule in ctx.gate_policy %}
+    <tr><td>{{ rule.name }}</td>
+      <td>{% if rule.reversibility == 'irreversible' %}<b>irreversible</b>{% else %}{{ rule.reversibility }}{% endif %}</td>
+      <td>{% if rule.reversibility == 'irreversible' %}<b>signet approval required</b>{% else %}auto (ledgered){% endif %}</td></tr>
+    {%- else %}
+    <tr><td colspan="3" class="muted">throughline is not serving its effect registry</td></tr>
+    {%- endfor %}
+  </tbody></table>
+  <p><button disabled title="cannot be disabled">disable gate</button>
+    <span class="muted">cannot be disabled &mdash; refused at config load
+      (scenario://throughline/no-bypass). Not a permission an admin lacks; a control the
+      substrate does not possess.</span></p>
+</section>
+
+<section class="card" id="auth" data-coordinate="scenario://signet/provider-policy">
+  <h2>Auth &amp; providers</h2>
+  <table><thead><tr><th>provider</th><th>state</th></tr></thead><tbody>
+    {%- for p in ctx.providers %}
+    <tr><td>{{ p.name }}</td><td>{{ p.state }}</td></tr>
+    {%- endfor %}
+  </tbody></table>
+  <div class="note">NOTE: AUTH_DISABLED is honoured only when HELM_ENV &isin; {dev, test}.
+    In staging/production the service REFUSES TO START with the flag set, naming it.
+    There is no mock/dev one-click sign-in in this product; a fixed identity can
+    only be constructed by a test, never through an HTTP route.
+    This process: HELM_ENV=<b>{{ ctx.env }}</b>, AUTH_DISABLED=<b>{{ ctx.auth_disabled }}</b>.</div>
+</section>
+{% endblock %}

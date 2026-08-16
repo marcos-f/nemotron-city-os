@@ -1,0 +1,30 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block main %}
+<h1>cause walk &mdash; {{ ctx.effect_id }}</h1>
+{{ c.stage_timeline(ctx.stages, "scenario://throughline/cause-walk") }}
+
+<div class="box" id="event-summary" data-coordinate="scenario://breaker/ledger-walk">
+  <h3>Effect &rarr; judgment &rarr; signal</h3>
+  {% if ctx.walk.hops %}
+  <table><thead><tr><th>hop</th><th>kind</th><th>seq</th><th>hash</th><th>verify</th></tr></thead>
+    <tbody>
+      {%- for hop in ctx.walk.hops %}
+      <tr><td>{{ loop.index }}</td><td>{{ hop.kind }}</td><td>{{ hop.seq }}</td>
+        <td>{{ hop.hash_prefix }}</td>
+        <td><span class="badge verify-badge">{{ '✓' if hop.verified else '✗' }}</span></td></tr>
+      {%- endfor %}
+    </tbody></table>
+  <p class="muted" style="font-size:15px">{{ ctx.walk.hop_count }} hop(s) &middot;
+    {{ 'complete chain' if ctx.walk.complete else 'incomplete' }}
+    {%- if ctx.walk.missing %} &middot; missing: {{ ctx.walk.missing|join(', ') }}{% endif %}</p>
+  {% else %}
+  <p class="muted">throughline returned no hops for this effect.</p>
+  {% endif %}
+</div>
+
+<div class="suggested-actions">
+  <a class="btn btn-primary" href="/console">Back to console</a>
+  <a class="btn" href="/approval-detail">Approval record</a>
+</div>
+{% endblock %}

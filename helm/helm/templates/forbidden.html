@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}NemoCity — not permitted{% endblock %}
+{% block body_class %}page-index{% endblock %}
+{% block body %}
+<header class="topbar"><span class="product-name">NemoCity</span></header>
+<nav class="tabs"><a href="/console">helm</a></nav>
+<main class="index-main">
+  <h1>not permitted &mdash; 403</h1>
+  <div class="box refuse">
+    <h3>{{ what }}</h3>
+    <p>{{ why }}</p>
+    <dl>
+      <dt>your subject</dt><dd>{{ subject or 'not signed in' }}</dd>
+      <dt>your role</dt><dd>{{ role }}</dd>
+      <dt>required</dt><dd>{{ required }}</dd>
+    </dl>
+  </div>
+  <div class="suggested-actions">
+    <a class="btn btn-primary" href="/console">&#8592; Back to console</a>
+    <a class="btn" href="/logout">Sign out</a>
+  </div>
+  <div class="note">No screen in this console is a dead end: this page always offers a way
+    back.</div>
+</main>
+<footer class="coord">use-case://signet/bind-identity</footer>
+{% endblock %}
