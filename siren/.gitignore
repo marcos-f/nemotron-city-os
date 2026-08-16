@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+coverage.xml
+report.xml
+.coverage
+# Runtime poll cache. The SHIPPED fallback is siren/seed_snapshot.json, which
+# is committed; this file is whatever the last live poll wrote.
+data/snapshot.json
+data/snapshot.json.tmp

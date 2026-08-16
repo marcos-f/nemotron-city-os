@@ -1,0 +1,27 @@
+{
+  "component": "throughline",
+  "phase": "done",
+  "criteria": {
+    "test://throughline/verify-live": "pass",
+    "test://throughline/tamper-case": "pass",
+    "test://throughline/refusal-named": "pass",
+    "test://throughline/hold-release": "pass",
+    "test://throughline/relay-mirror": "pass",
+    "int://throughline/feed-signals": "pass"
+  },
+  "subgoal": "SG6",
+  "blockers": [],
+  "notes": "Substrate complete and serving on :8600. Every sibling that has a runtime now feeds it live: docket (permit.document), breaker (microgrid.telemetry, grid.telemetry), siren (fire.incident) and helm (helm.*) all appear as signal.ingested entries on the running ledger, and all four report phase=done on merged main. blindspot feeds nothing and never will on this build: it is designed, contract-published and deliberately not built, :8604 refuses connections, and its own .build-status.json records that as a decision rather than a gap. Two defects that only a live run could surface were found and fixed: the ledger was not append-safe across processes (two instances forked the chain; appends now take an exclusive flock and re-read the tail under it), and importing throughline.app booted a second substrate as a side effect.",
+  "updated_utc": "2026-08-16T08:20:00Z",
+  "evidence": {
+    "unit": "121 pytests green, coverage 93% (--cov-fail-under=80, failable, in CI). Count verified twice: locally and in a clean clone of main at 35b0e79. Two earlier MR descriptions (!11, !12) quoted 118 and 129 from estimate rather than from the summary line; 121 is the measured number.",
+    "api": "openapi-spec-validator on contracts/openapi.yaml + every contract path implemented and smoked",
+    "bvt": "distinct CI stage: clean venv, pristine source copy, install from pyproject, real boot, every contract path over HTTP",
+    "live": "service running on :8600 against real nemo-relay 0.7.3; signal -> judgment -> irreversible effect held -> subjectless decide refused 422 -> released by oidc subject -> executed; 3-hop cause walk all verified; unsafe config refused at tests/fixtures/unsafe-auto-execute.yaml:10 rule RULE-666 with the running config untouched; ledger verify valid over 12 entries",
+    "clean_clone": "independent verification from a fresh clone of main at 35b0e79: 121 passed, coverage 93%, scripts/bvt.sh green",
+    "cli": "contracts/opencli.yaml implemented; every declared command and flag asserted against the contract file",
+    "mcp": "mcp/tools.json tools mapped to implemented paths; decide_approval's agent-refusal promise enforced and tested",
+    "int": "int://throughline/feed-signals discharged against the RUNNING federation on 2026-08-16T08:05Z, not against fixtures. helm scripts/integration_check.py with HELM_REQUIRE_REAL_SUBSTRATE=1: 9/9 PASS against throughline on :8600 (effect queued 202, real overview chain_length=2218, composed assembles on the real gate-hold, agent refused by the real substrate and the refusal on the real ledger, subject-less decide 422, human approval executes, chain walks back hash-verified 2 hops, ledger still verifies over 2224 entries). Live ledger by signal class: microgrid.telemetry 126, fire.incident 112, helm.nemoclerk.turn 36, permit.document 20, grid.telemetry 12, plus helm.admin/refusal/probe entries — 322 signal.ingested in total. scripts/check-sibling-contracts.py: zero drift, and docket, breaker, siren and helm all read phase=done from merged main. tests/test_integration_feeds.py: 7 passed.",
+    "siblings": "The earlier blocker on this file said the siblings published contracts but that none carried a .build-status.json on merged main (all phase=not-started as of 2026-08-16T03:30Z). That was true when written and is false now: docket 4/4, breaker 4/4, siren 3/3 and helm 16/16 are done on merged main. The one remaining not-started reading, blindspot, is a published decision, not a pending task."
+  }
+}

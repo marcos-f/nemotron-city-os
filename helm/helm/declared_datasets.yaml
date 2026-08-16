@@ -1,0 +1,158 @@
+# Datasets declared by components that cannot answer for themselves.
+#
+# Every component serves its own registry at GET /datasets. One cannot:
+# blindspot is designed, contract-published and DELIBERATELY NOT BUILT, so
+# nothing listens on :8604 and nothing ever will until that build goal is
+# started. Its datasets still have to appear in the console — hiding them
+# would make the gap invisible, which is the one thing this project refuses
+# to do.
+#
+# This file is therefore a TRACEABLE COPY, not an authority. Each block names
+# the repository that owns the truth, and the console labels everything served
+# from here as "declared" rather than presenting it as a live read.
+#
+# If a component here starts serving /datasets, the live read wins and this
+# block stops being used.
+version: 1
+declarations:
+- component: blindspot
+  source_of_truth: 'nvidia-hackathon/nemo-nvidia-demo/blindspot :: config/datasets.yaml (commit
+    4e1d417) and README.md "Data provenance". Nothing is downloaded and nothing is committed
+    in that repository; the entire repo is about 1 MB, roughly 4500x smaller than the single
+    shard the design specifies.'
+  note: blindspot serves nothing on :8604 by design, so it cannot answer GET /datasets for
+    itself. These entries are copied VERBATIM from its own registry — what the design NAMES,
+    for a build that has not happened. If blindspot ever starts serving, the live read wins
+    and this block stops being used.
+  datasets:
+  - id: blindspot.physicalai-warehouse-scenes
+    name: PhysicalAI WorldModel Synthetic Warehouse Operations Scenes (corpus)
+    component: blindspot
+    mode: declared-unavailable
+    real_or_synthetic: synthetic
+    availability: unavailable
+    source: https://huggingface.co/datasets/nvidia/PhysicalAI-WorldModel-Synthetic-Warehouse-Operations-Scenes
+    dataset_identifier: nvidia/PhysicalAI-WorldModel-Synthetic-Warehouse-Operations-Scenes
+    licence: OpenMDW-1.1 (ungated)
+    provenance: 'Named in this repository''s specs, never downloaded. Coordinates: .viper-context/specs/v0.1.0/product/UC-004_blindspot-near-miss.md
+      (scenario://blindspot/frame-captions, scenario://blindspot/data-discipline), .viper-context/specs/v0.1.0/product/PRODUCT.md
+      ("549GiB-quickstart prohibited"), .viper-context/specs/v0.1.0/product/ideas/IDEA-001-blindspot-floor-watch.md,
+      .viper-context/plan/web/v0.1.0/briefs/BUILD-GOAL-blindspot.md and PRODUCT-ROADMAP.md.
+      See README.md "Data provenance". No HTTP request has ever been made to the source from
+      this repository, and no byte of it is committed here.'
+    refresh: None. Nothing fetches this. A build that has not happened cannot have a refresh
+      cadence.
+    as_of: null
+    offline_cache: null
+    record_count: null
+    notes: 'NVIDIA-generated warehouse operations scenes; the design uses the forklift/human
+      near-miss scenario. THE SOURCE URL IS INFERRED: no URL for this dataset appears anywhere
+      in this repository''s specs — only the Hugging Face dataset id, recorded above in dataset_identifier.
+      The URL is the canonical huggingface.co/datasets/<id> form derived from that id and
+      has not been fetched or otherwise confirmed from here. The licence, OpenMDW-1.1 ungated,
+      IS established (README.md, and previously only the orchestrator''s idea document — this
+      file is where it now lives in this repo). PROHIBITED, as a hard spec rule (scenario://blindspot/data-discipline):
+      the dataset card''s own quickstart, which pulls 549 GiB. Never that, in scripts or by
+      hand. Staging, if it ever happens, is metadata parquet FIRST and then exactly one shard
+      — see the two entries below.'
+  - id: blindspot.physicalai-clip-metadata
+    name: PhysicalAI clip metadata parquet (runs.parquet + clips.parquet)
+    component: blindspot
+    mode: declared-unavailable
+    real_or_synthetic: synthetic
+    availability: unavailable
+    source: metadata/runs.parquet and metadata/clips.parquet within nvidia/PhysicalAI-WorldModel-Synthetic-Warehouse-Operations-Scenes
+    dataset_identifier: nvidia/PhysicalAI-WorldModel-Synthetic-Warehouse-Operations-Scenes
+    licence: OpenMDW-1.1 (ungated)
+    provenance: Named as staging step 1 in .viper-context/specs/v0.1.0/product/UC-004_blindspot-near-miss.md
+      (scenario://blindspot/data-discipline) and restated in .viper-context/specs/v0.1.0/product/PRODUCT.md,
+      .viper-context/plan/web/v0.1.0/briefs/BUILD-GOAL-blindspot.md and PRODUCT-ROADMAP.md.
+      Never downloaded; no .parquet file is committed in this repository.
+    refresh: None. Nothing fetches this.
+    as_of: null
+    offline_cache: null
+    record_count: null
+    notes: 'runs.parquet ~1.8 MB, clips.parquet ~4.4 MB. Declared separately from the corpus
+      because it has its own size, its own purpose and its own position in a mandated ORDER:
+      metadata FIRST, to filter by scenario, seed and camera, so that exactly one RGB shard
+      need ever be pulled. Sizes are the specs'' figures, not measurements taken here — nothing
+      was downloaded to weigh.'
+  - id: blindspot.physicalai-nearmiss-rgb-shard
+    name: PhysicalAI near-miss RGB shard nearmiss-rgb-00000.tar
+    component: blindspot
+    mode: declared-unavailable
+    real_or_synthetic: synthetic
+    availability: unavailable
+    source: nearmiss-rgb-00000.tar within nvidia/PhysicalAI-WorldModel-Synthetic-Warehouse-Operations-Scenes
+    dataset_identifier: nvidia/PhysicalAI-WorldModel-Synthetic-Warehouse-Operations-Scenes
+    licence: OpenMDW-1.1 (ungated)
+    provenance: Named as staging step 2 — "exactly one shard" — in .viper-context/specs/v0.1.0/product/UC-004_blindspot-near-miss.md
+      (scenario://blindspot/data-discipline), restated in .viper-context/specs/v0.1.0/product/PRODUCT.md,
+      .viper-context/plan/web/v0.1.0/briefs/BUILD-GOAL-blindspot.md and PRODUCT-ROADMAP.md.
+      Never downloaded; no .tar is committed in this repository.
+    refresh: None. Nothing fetches this.
+    as_of: null
+    offline_cache: null
+    record_count: null
+    notes: '4.98 GiB, exactly one shard, and only after the metadata parquet has narrowed
+      the selection. Declared separately from both the corpus and the metadata because it
+      is three orders of magnitude larger and is gated behind them. The whole of this repository
+      is about 1 MB — roughly 4500x smaller than this single shard. PROHIBITED (scenario://blindspot/data-discipline):
+      the dataset card''s own quickstart, which pulls 549 GiB. One shard, never the quickstart.'
+  - id: blindspot.sampled-frames
+    name: Sampled warehouse clip frames (ffmpeg fps=1/2)
+    component: blindspot
+    mode: declared-unavailable
+    real_or_synthetic: synthetic
+    availability: unavailable
+    source: Derived locally from blindspot.physicalai-nearmiss-rgb-shard by ffmpeg; would
+      be produced by a build that has not happened.
+    dataset_identifier: null
+    licence: Derived from OpenMDW-1.1 (ungated) source material; no separate licence is asserted,
+      and no derived work exists to license.
+    provenance: 'Named as the sampling step in .viper-context/plan/web/v0.1.0/briefs/BUILD-GOAL-blindspot.md
+      and PRODUCT-ROADMAP.md ("ffmpeg fps=1/2"), and in README.md "Data provenance". Never
+      produced: no frames, no images and no ffmpeg invocation exist in this repository.'
+    refresh: None. Nothing produces this.
+    as_of: null
+    offline_cache: null
+    record_count: null
+    notes: One frame per two seconds. Declared so the frame corpus the captioner would consume
+      is on the record as a distinct, and equally absent, artefact rather than being folded
+      into the shard it would come from. No frame count is given because none was ever produced
+      to count — no figure was invented to fill the gap.
+  - id: blindspot.nano-omni-caption-endpoint
+    name: nemotron-3-nano-omni caption inference endpoint (not a dataset — an endpoint)
+    component: blindspot
+    mode: declared-unavailable
+    real_or_synthetic: synthetic
+    availability: unavailable
+    source: config/inference.yaml — backend `hosted` (https://integrate.api.nvidia.com/v1)
+      and backend `local_gb10` (http://dgx-spark.nemotron.example.com:8000/v1)
+    dataset_identifier: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+    licence: unknown — no licence for the model or the endpoint is recorded anywhere in this
+      repository. config/inference.yaml describes the BF16 weights (nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16)
+      as "open, ungated, 62GiB", which is an access statement, not a licence identifier.
+    provenance: Recorded in config/inference.yaml (added 2026-08-16 by the siren build agent
+      at the operator's direction) and in README.md "Caption inference endpoint"; named in
+      .viper-context/plan/web/v0.1.0/briefs/BUILD-GOAL-blindspot.md. Nothing in this repository
+      calls either backend.
+    refresh: Per-frame inference, batch — one call per frame. Not polled, and not called from
+      here at all.
+    as_of: null
+    offline_cache: null
+    record_count: null
+    notes: 'Declared as an INFERENCE ENDPOINT, not as a dataset: it produces captions, it
+      does not supply data. It is listed here because it is the other external dependency
+      the design carries, and a provenance record that omitted it would be incomplete. Honest
+      observed state, from config/inference.yaml: backend `hosted` state `entitled`, observed
+      2026-08-16T04:50:00Z; backend `local_gb10` state `serving` on an NVIDIA GB10 (DGX Spark),
+      observed 2026-08-16T06:39:47Z, verified by an image->caption round-trip against a SYNTHETIC
+      test image — never against PhysicalAI shard frames, which have never been downloaded.
+      That observation says the multimodal path round-trips; it says nothing about caption
+      quality on warehouse footage. availability is `unavailable` here because blindspot is
+      designed, not built — nothing is serving on :8604 and no blindspot code calls either
+      backend, whatever state the backend itself was last observed in. Permanent label: batch,
+      not streaming. The ~5.5s/frame figure quoted for the hosted path is NOT reproducible
+      from this repository (README.md limitation 3): no benchmark script, timing log or cached
+      caption is committed here.'

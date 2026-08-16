@@ -1,0 +1,126 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block main %}
+<h1>{{ ctx.page.h1 }}</h1>
+{{ c.stage_timeline(ctx.stages, "feature-area://siren") }}
+
+{% if not ctx.services.siren.online %}
+{{ c.offline_pane("siren", 8603, ctx.services.siren.detail, reason="unreachable") }}
+{% else %}
+<div class="box" id="event-summary" data-coordinate="scenario://siren/hot-reload">
+  <h3>Hot-reload &amp; routine dispatch</h3>
+  <p><code>incident.yaml &rarr; config/</code></p>
+  <div id="hot-reload" data-coordinate="scenario://siren/hot-reload"
+       style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.9em">
+    {%- for step in ctx.reload_steps %}
+    <span class="badge verify-badge">{{ step }} &#10003;</span>{{ '→' if not loop.last }}
+    {%- endfor %}
+    <span class="muted">(no redeploy)</span>
+  </div>
+  <h3 style="margin-top:1em">Second stream: the refused config event</h3>
+  {{ c.stage_timeline(ctx.refused_stages, "scenario://throughline/refusal-named", "mini mini-draw") }}
+</div>
+{% endif %}
+
+<div class="suggested-actions" data-coordinate="feature-area://siren">
+  <button class="btn btn-primary" type="button" onclick="hotReloadClass('incident')">Drop incident.yaml</button>
+  <a class="btn" href="/console">View snapshot</a>
+</div>
+
+<div class="visual-region" id="incident-map" data-coordinate="feature-area://siren">
+  <svg viewBox="0 0 620 300" width="100%" style="max-width:620px;display:block" role="img"
+       aria-label="NemoCity incident map: active 911 incidents by type across the districts">
+    <rect x="0" y="0" width="620" height="300" fill="var(--soft)" opacity=".35"/>
+    <path d="M0,0 L96,0 C86,54 104,108 78,162 C58,212 84,256 62,300 L0,300 Z" fill="var(--accent)" opacity=".07"/>
+    <path d="M96,0 C86,54 104,108 78,162 C58,212 84,256 62,300" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+    <text x="20" y="162" font-size="11" fill="var(--muted)" transform="rotate(-90 20 162)"
+          letter-spacing="1.5">PUGET SOUND</text>
+    <g stroke="var(--line)" stroke-width="1" opacity=".75">
+      <path d="M250,0 L262,300"/><path d="M392,0 L392,300"/><path d="M520,0 L512,300"/>
+      <path d="M96,66 L620,60"/><path d="M84,144 L620,138"/><path d="M70,222 L620,216"/></g>
+    <path d="M132,0 L176,300" stroke="var(--muted)" stroke-width="3" opacity=".45"/>
+    <text x="150" y="292" font-size="10" fill="var(--muted)">I-5</text>
+    <g font-size="11" fill="var(--muted)" letter-spacing="1.2">
+      <text x="196" y="36">BALLARD</text><text x="300" y="36">FREMONT</text><text x="432" y="36">U-DISTRICT</text>
+      <text x="196" y="114">QUEEN ANNE</text><text x="300" y="114">S. LAKE UNION</text><text x="432" y="114">CAPITOL HILL</text>
+      <text x="196" y="192">BELLTOWN</text><text x="300" y="192">DOWNTOWN</text><text x="432" y="192">CENTRAL DIST</text>
+      <text x="196" y="270">SODO</text><text x="300" y="270">BEACON HILL</text><text x="432" y="270">RAINIER</text></g>
+    <g>
+      {%- for marker in ctx.incident_markers %}
+      <g class="pin">
+        <title>{{ marker.n }} · {{ marker.id }} · {{ marker.kind }} · {{ marker.state }}</title>
+        {%- if marker.shape == 'triangle' %}
+        <polygon points="{{ marker.x }},{{ marker.y - 12 }} {{ marker.x + 11 }},{{ marker.y + 7 }} {{ marker.x - 11 }},{{ marker.y + 7 }}"
+                 fill="var(--{{ marker.tone }})"{% if marker.tone == 'muted' %} opacity=".55"{% endif %}/>
+        {%- elif marker.shape == 'square' %}
+        <rect x="{{ marker.x - 9 }}" y="{{ marker.y - 9 }}" width="18" height="18" rx="2"
+              fill="var(--{{ marker.tone }})"{% if marker.tone == 'muted' %} opacity=".55"{% endif %}/>
+        {%- elif marker.shape == 'diamond' %}
+        <polygon points="{{ marker.x }},{{ marker.y - 12 }} {{ marker.x + 12 }},{{ marker.y }} {{ marker.x }},{{ marker.y + 12 }} {{ marker.x - 12 }},{{ marker.y }}"
+                 fill="var(--{{ marker.tone }})"{% if marker.tone == 'muted' %} opacity=".55"{% endif %}/>
+        {%- else %}
+        <circle cx="{{ marker.x }}" cy="{{ marker.y }}" r="10"
+                fill="var(--{{ marker.tone }})"{% if marker.tone == 'muted' %} opacity=".55"{% endif %}/>
+        {%- endif %}
+        <text x="{{ marker.x }}" y="{{ marker.y + (6 if marker.shape == 'triangle' else 4) }}"
+              text-anchor="middle" font-size="11" font-weight="700"
+              fill="var(--pin-ink)">{{ marker.n }}</text>
+      </g>
+      {%- endfor %}
+    </g>
+    <text x="600" y="24" text-anchor="end" font-size="11" fill="var(--amber-text)"
+          letter-spacing="1.4" font-weight="600">{{ ctx.active_incidents }} ACTIVE</text>
+  </svg>
+
+  <div class="map-legend" style="display:flex;flex-wrap:wrap;align-items:center;gap:20px;
+      margin-top:16px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)">
+    <span style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Legend</span>
+    {%- for entry in ctx.marker_legend %}
+    <span style="display:inline-flex;align-items:center;gap:8px"><svg width="14" height="14" aria-hidden="true">
+      {%- if entry.shape == 'triangle' %}<polygon points="7,1 13,12 1,12" fill="var(--muted)"/>
+      {%- elif entry.shape == 'square' %}<rect x="2" y="2" width="10" height="10" fill="var(--muted)"/>
+      {%- elif entry.shape == 'diamond' %}<polygon points="7,1 13,7 7,13 1,7" fill="var(--muted)"/>
+      {%- else %}<circle cx="7" cy="7" r="5" fill="var(--muted)"/>{% endif %}
+    </svg>{{ entry.label }}</span>
+    {%- endfor %}
+    <span style="display:inline-flex;align-items:center;gap:8px"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="var(--amber)"/></svg><span style="color:var(--amber-text)">active</span></span>
+    <span style="display:inline-flex;align-items:center;gap:8px"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="var(--muted)" opacity=".55"/></svg>closed</span>
+  </div>
+
+  {%- if ctx.incident_markers %}
+  <table class="incident-key" id="incident-key" style="margin-top:16px">
+    <thead><tr><th style="width:52px">pin</th><th>id</th><th>type</th><th>address</th><th>state</th></tr></thead>
+    <tbody>
+      {%- for marker in ctx.incident_markers %}
+      <tr>
+        <td><span class="pin-key{{ ' closed' if marker.state == 'closed' }}">{{ marker.n }}</span></td>
+        <td>{{ marker.id }}</td><td>{{ marker.kind }}</td>
+        <td>{{ marker.address or '—' }}</td><td>{{ marker.state }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  {%- endif %}
+  <p class="muted" style="font-size:.8em;margin-top:12px">{{ ctx.feed_label }}</p>
+</div>
+
+{% if ctx.refusal %}
+<div class="box refuse refusal-flash" id="refusal-panel" data-coordinate="scenario://throughline/refusal-named">
+  <h3>REFUSED &mdash; config rejected</h3>
+  <p>config rejected: <code>{{ ctx.refusal.rule }}</code> in
+    <code>{{ ctx.refusal.file }}</code>{% if ctx.refusal.line %} line {{ ctx.refusal.line }}{% endif %}
+    &mdash; refused at load, previous config untouched.</p>
+  <pre class="mono">{{ ctx.refusal.message or ctx.refusal.detail }}</pre>
+</div>
+{% else %}
+<div class="box refuse" id="refusal-panel" data-coordinate="scenario://throughline/refusal-named">
+  <h3>The refusal, standing</h3>
+  <p>A config marking an irreversible effect <code>auto_execute: true</code> is refused
+    whole at load, naming file, rule and line. No such config is loaded right now, so
+    there is no live refusal to show — the rule that would refuse it is in force.</p>
+</div>
+{% endif %}
+<div class="note" data-coordinate="scenario://throughline/refusal-named"><b>NOTE:</b> the refusal
+  is the pitch; it is never cut. A config that tries to auto-execute an irreversible effect is
+  rejected at load time, not silently downgraded.</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{
+  "component": "helm",
+  "phase": "done",
+  "criteria": {
+    "test://helm/openapi-surface-complete": "pass",
+    "test://signet/subject-required": "pass",
+    "test://helm/agent-refusal": "pass",
+    "test://helm/human-can-agent-cannot": "pass",
+    "test://helm/composed-on-gatehold": "pass",
+    "test://signet/auth-flag-env": "pass",
+    "test://helm/theme-modes": "pass",
+    "test://helm/nemoclerk-grounded": "pass",
+    "test://helm/nemoclerk-context": "pass",
+    "test://helm/rbac-admin": "pass",
+    "test://demo/offline-run": "pass",
+    "visual://helm/screenshots": "pass",
+    "test://signet/approver-bound-to-session": "pass",
+    "test://signet/auth-capability-policy": "pass",
+    "test://helm/never-claims-unknown": "pass",
+    "test://helm/principal-names-what-served": "pass"
+  },
+  "subgoal": "SG10 (panel remediation)",
+  "blockers": [],
+  "notes": "Console serving on :8610 against the REAL federation. A 17-reviewer panel returned 5 SHIP / 12 NOT SHIP, and every refusal was ONE defect wearing a different hat: the system asserted things it could not verify. That is now a single mechanism (helm/attest.py: Reading, LastSeen, ActionResult) with a single test (tests/test_never_claims_unknown.py) that takes the whole federation away and reads every page and endpoint. A value has three states, never two; unknown never renders as a confident zero, empty, green or success. blindspot :8604 remains deliberately unbuilt and its pane copy is untouched.",
+  "updated_utc": "2026-08-16T07:40:00Z",
+  "evidence": {
+    "static": "CI validate green: yamllint -d relaxed, openapi-spec-validator, mcp/tools.json parse, ultra-gate 01/02/03, wireframe parse+link check over 10 pages, and a PALETTE v2.1 assertion that the interactive hue is light blue (green stays reserved).",
+    "unit": "129 pytests green, coverage 86% against a failable --cov-fail-under=70. Named acceptance files plus tests/test_never_claims_unknown.py (17 tests, the principle) and tests/test_map_layout.py (20, the geometry).",
+    "api": "contracts/openapi.yaml (27 paths) validates; every contract path asserted served in both directions, and every console action asserted present in /docs. contracts/opencli.yaml and mcp/tools.json are asserted against the implemented CLI and the hosted MCP surface.",
+    "int": "CI job 5152879 on pipeline (internal), GREEN: throughline cloned from its own merged main over a verified TLS channel, installed, booted on :8600, then 9/9 checks \u2014 effect queued by the real gate, composed assembled on the real gate-hold, agent refused 403 and ledgered, subject-less decide 422, human approval executed, walk hash-verified, ledger valid. Locally against the long-running federation the same script reports 9/9 with the ledger valid over 34 entries.",
+    "e2e": "scripts/demo.py --offline: 9/9 steps with the socket guard armed AND verified to bite, twice \u2014 once self-contained (CI, artifacts/demo-run.json) and once against the REAL federation on its fixed ports (artifacts/demo-run-real.json): 69 ledger entries, agent refused at seq 74, subject-less decide 422, human approval executed, 2-hop walk hash-verified.",
+    "bvt": "distinct CI stage: pristine source copy, clean venv, install from pyproject only, real boot on a free port, 34 requests over HTTP across every contract path plus /docs, /openapi.json, /login, /console and the stylesheet. 0 failures.",
+    "visual": "scripts/visual_check.py: 49/49 ELEMENT-COVERAGE components in the LIVE DOM, 26 screenshots in both themes, map pins measured in the rendered DOM (6 placed, closest pair 37px, rightmost x=490 in a 620 frame), and the choreography driven rather than described.",
+    "model": "NemoClerk now leads with an NVIDIA model on NVIDIA silicon: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning on the GB10 Grace Blackwell DGX Spark at dgx-spark:8000, measured 0.6s for an 11-token turn and 1.07s for a grounded console turn end to end. It requires /no_think and has no tool-call parser; helm's grounding is a mechanism, not a capability it rents from a model, so the deterministic router grounds the turn either way. qwen3.6-27b on an RTX 5090 is rung 2 and does support tool choice. The deepseek rung on :18000 is gone (the GB10 cannot host both) and is reported as unreachable rather than skipped. A rung earns its name PER TURN: a transport failure evicts it and forces a re-probe, and the ledgered principal names what actually served \u2014 cache@<tier> for a replay, mock@none for the composer. Every turn writes model+silicon+principal into the chain (verified live at seq 1728).",
+    "honesty": "MOCK LOGIN is a badge in the header on every page; an offline sibling gets a labelled pane naming the port and never a fabricated figure; blindspot carries its DESIGNED and batch-not-streaming ribbons; breaker's note says the rule runs and cuOpt is registered-but-unavailable rather than claiming cuOpt; a cached or mock NemoClerk turn carries its own label.",
+    "clean_clone": "Independent verification from a FRESH clone of merged main at 63ee245, not this session's working tree: 76 pytests green with coverage 85% against a failable --cov-fail-under=70; scripts/bvt.sh 34 requests 0 failures from a clean venv on a free port; scripts/demo.py --offline --self-contained 9/9 with the socket guard verified to bite; and integration_check.py 9/9 against the real throughline on :8600 with its ledger valid over 91 entries.",
+    "security": "The ledgered approver is the signet subject of the session and nothing else. Reproduced before: a cookieless POST returned 200 and EXECUTED an irreversible load-shed as 'attacker@example.com'. Reproduced after: 403 refusal_kind=anonymous, nothing executed; a signed-in caller attesting someone else's name gets 403 refusal_kind=impersonation with BOTH principals hash-chained (verified live at seq 1605); a matching attestation succeeds and records approver_source=session. The identity-minting POLICY is attached to the capability, not to one flag: AUTH_DISABLED, MOCK_LOGIN and the default session secret each refuse a protected-env boot by name, and /auth/mock 404s outside dev/test."
+  },
+  "surfaces": {
+    "http": "http://127.0.0.1:8610 (/docs)",
+    "pages": [
+      "/login",
+      "/",
+      "/console",
+      "/docket",
+      "/breaker",
+      "/siren",
+      "/blindspot",
+      "/composed",
+      "/approval-detail",
+      "/walk/{effect_id}",
+      "/admin",
+      "/profile"
+    ],
+    "cli": "helm --url http://127.0.0.1:8610 <overview|feeds|health|approvals|decide|ledger|verify|walk|composed|ask>",
+    "mcp": "GET /mcp/tools, POST /mcp/call \u2014 13 tools, 11 read, 1 reload, 1 effect (refused for agent principals on an irreversible effect)"
+  }
+}

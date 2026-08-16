@@ -1,0 +1,149 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block main %}
+<h1>{{ ctx.page.h1 }}</h1>
+
+<div class="box" data-coordinate="scenario://helm/dataset-registry">
+  <span class="eyebrow">registry</span>
+  <p class="muted">
+    Every dataset is declared by the component that consumes it. The loader
+    refuses a registry that omits a licence or a provenance, that dates a
+    cached snapshot with no as-of time, or that labels a fixture
+    <span class="mono">real</span> — so an entry below has evidence behind it
+    or the file does not load.
+  </p>
+  <p>
+    {% if ctx.datasets.total is none %}
+    <span class="badge" style="background:rgba(var(--amber-rgb),.14);color:var(--amber-text)">
+      total unknown — no component could be read</span>
+    {% else %}
+    <span class="badge">{{ ctx.datasets.total }} declared{% if not ctx.datasets.complete %}
+      across the {{ ctx.datasets.counted_over|length }} component(s) that answered{% endif %}</span>
+    {% endif %}
+    <span class="badge">{{ ctx.datasets.licence_known }} with a licence</span>
+    {% if ctx.datasets.licence_unknown %}
+    <span class="badge" style="background:rgba(var(--amber-rgb),.14);color:var(--amber-text)">
+      {{ ctx.datasets.licence_unknown }} licence unknown</span>
+    {% endif %}
+    {% if ctx.datasets.unavailable %}
+    <span class="badge" style="background:rgba(var(--amber-rgb),.14);color:var(--amber-text)">
+      {{ ctx.datasets.unavailable }} declared, not built</span>
+    {% endif %}
+  </p>
+  {% if ctx.datasets.components_unreachable %}
+  <p class="muted" style="font-size:15px">
+    Not reached just now:
+    <span class="mono">{{ ctx.datasets.components_unreachable|join(', ') }}</span>.
+    Their rows below are what they <b>declared</b>, not what they answered.
+    This is not a claim that they have no data.
+  </p>
+  {% endif %}
+</div>
+
+{% for block in ctx.datasets.components %}
+<div class="box" id="datasets-{{ block.component }}"
+     data-coordinate="feature-area://{{ block.component }}">
+  <span class="eyebrow">{{ block.component }}</span>
+
+  {% if not block.known %}
+  {# Neither a live read nor a declaration. Unknown is not empty. #}
+  {{ c.offline_pane(block.component, ctx.ports[block.component], block.detail) }}
+  <p class="muted" style="font-size:15px">
+    No dataset registry could be read and none is declared on file. This is
+    <b>unknown</b>, not zero — no figure was substituted.
+  </p>
+
+  {% else %}
+  <p class="muted" style="font-size:15px">
+    {% if block.reachable %}
+      Read live from <span class="mono">{{ block.source or 'its registry' }}</span>.
+    {% else %}
+      <b>Component offline</b> — {{ block.detail }}. These
+      {{ block.count }} row(s) are <b>declared</b>, from
+      <span class="mono">{{ block.source }}</span>. designed, not built — no
+      figure was invented to fill the gap.
+    {% endif %}
+  </p>
+
+  {% if not block.datasets %}
+  <p class="muted">This component declares no datasets.</p>
+  {% else %}
+  <div style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>dataset</th><th>mode</th><th>real?</th><th>licence</th>
+        <th>as of</th><th>provenance</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in block.datasets %}
+      <tr id="dataset-{{ d.id }}"
+          {% if d.availability == 'unavailable' %}class="highlight"{% endif %}>
+        <td>
+          <span class="mono">{{ d.id }}</span><br>
+          <span class="muted" style="font-size:14px">{{ d.name }}</span>
+          {% if d.dataset_identifier %}
+          <br><span class="mono" style="font-size:13px">{{ d.dataset_identifier }}</span>
+          {% endif %}
+          {# Authority is warrant's, read through, never stored here. The link
+             is this page's only statement about ownership. #}
+          <br><a href="/datasets/{{ d.id }}/people"
+                 style="font-size:13px">who may change this →</a>
+        </td>
+        <td>
+          {% if d.mode == 'declared-unavailable' %}
+          <span class="badge" style="background:rgba(var(--amber-rgb),.14);color:var(--amber-text)">
+            declared, not built</span>
+          {% elif d.mode == 'live' %}
+          <span class="badge" style="background:rgba(var(--accent-rgb),.14);color:var(--accent-text)">live</span>
+          {% else %}
+          <span class="badge">{{ d.mode }}</span>
+          {% endif %}
+        </td>
+        <td><span class="mono">{{ d.real_or_synthetic }}</span></td>
+        <td>
+          {% if d.licence == 'unknown' %}
+          <span class="badge" style="background:rgba(var(--amber-rgb),.14);color:var(--amber-text)">unknown</span>
+          {% else %}
+          <span class="mono" style="font-size:14px">{{ d.licence }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if d.as_of %}<span class="mono" style="font-size:14px">{{ d.as_of }}</span>
+          {% elif d.mode == 'live' %}<span class="muted">per request</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td style="max-width:38ch">
+          <span class="muted" style="font-size:14px">{{ d.provenance }}</span>
+          {% if d.notes %}
+          <br><span class="muted" style="font-size:13px">{{ d.notes }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endfor %}
+
+<div class="box">
+  <span class="eyebrow">discovery</span>
+  <p class="muted" style="font-size:15px">
+    The same registry is readable three other ways, and they are held to agree
+    with each other in CI:
+  </p>
+  <pre class="mono">curl :8601/datasets                     # OpenAPI, per component
+docket dataset show --id docket.seattle-permits    # CLI
+mcp call list_datasets                  # MCP, read-only</pre>
+  <p class="muted" style="font-size:14px">
+    Discovery is a read. There is no surface here — page, API, CLI or MCP —
+    that changes a dataset's source or mode. That is a config edit in the
+    owning component, accepted or refused by its loader, and every refusal is
+    ledgered.
+  </p>
+</div>
+{% endblock %}

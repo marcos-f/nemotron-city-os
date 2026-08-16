@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}NemoCity — page not found{% endblock %}
+{% block body_class %}page-index{% endblock %}
+{% block body %}
+<header class="topbar"><span class="product-name">NemoCity</span></header>
+<main class="index-main">
+  <h1>not found &mdash; 404</h1>
+  <div class="box">
+    <p><span class="mono">{{ path }}</span> is not a route this console serves.</p>
+  </div>
+  <div class="suggested-actions">
+    <a class="btn btn-primary" href="/">&#8592; Home</a>
+    <a class="btn" href="/guest">Guest console (read-only, no account)</a>
+    <a class="btn" href="/help">Help</a>
+    <a class="btn" href="/docs">/docs</a>
+  </div>
+  <div class="note">No screen in this console is a dead end: a stuck reviewer always has a way
+    back in from here.</div>
+</main>
+<footer class="coord">feature-area://helm</footer>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}NemoCity — index{% endblock %}
+{% block body_class %}page-index{% endblock %}
+{% block body %}
+<header class="topbar"><span class="product-name">NemoCity</span>
+  <span class="theme-toggle">
+    <button data-t="light" onclick="setTheme('light')">light</button>
+    <button data-t="dark" onclick="setTheme('dark')">dark</button>
+    <button data-t="system" onclick="setTheme('system')">system</button>
+  </span></header>
+<main class="index-main">
+  <h1>helm &mdash; console index</h1>
+  <p class="muted">Every page below is served by this process on :{{ port }} and reads the
+    real federation. <a href="/docs">/docs</a> is the whole surface.</p>
+  <ul class="page-list">
+    {%- for card in cards %}
+    <li><a href="{{ card.path }}">{{ card.title }}</a>
+      <p>{{ card.blurb }}</p>
+      <span class="coord-tag">{{ card.coordinate }}</span></li>
+    {%- endfor %}
+  </ul>
+</main>
+<footer class="coord">feature-area://helm</footer>
+{% endblock %}

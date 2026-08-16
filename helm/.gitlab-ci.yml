@@ -1,0 +1,217 @@
+image: python:3.14-slim
+
+stages:
+  - static
+  - test
+  - verify
+
+default:
+  before_script:
+    - python -m pip install --quiet --upgrade pip
+
+# ---------------------------------------------------------------- static+
+validate:
+  stage: static
+  script:
+    - pip install --quiet yamllint openapi-spec-validator PyYAML
+    - yamllint -d relaxed .
+    - python -m openapi_spec_validator contracts/openapi.yaml
+    - python3 -m json.tool mcp/tools.json >/dev/null
+    - python3 scripts/run-ultra-gate.py 01 02 03
+    - |
+      python3 -c "
+      import os, re, sys
+      from html.parser import HTMLParser
+      d = '.viper-context/specs/v0.1.0/ux/web/wireframes'
+      pages = sorted(f for f in os.listdir(d) if f.endswith('.html'))
+      ok = True
+      for p in pages:
+          content = open(os.path.join(d, p)).read()
+          HTMLParser().feed(content)
+          for h in re.findall(r'href=\"([^\"]+)\"', content):
+              if h.startswith(('http://', 'https://', '#', 'mailto:')):
+                  continue
+              if not os.path.exists(os.path.join(d, h)):
+                  ok = False
+                  print('BROKEN LINK', p, h)
+      print('wireframe parse+link check: %d pages, %s' % (len(pages), 'PASS' if ok else 'FAIL'))
+      sys.exit(0 if ok else 1)
+      "
+    - |
+      python3 -c "
+      import sys
+      css = open('helm/static/app.css').read().replace(' ', '')
+      # PALETTE v2.1 is LOCKED: green is RESERVED for verified/flowing and
+      # never carries interaction; light blue is the interactive hue.
+      for token, why in (
+          ('--btn-primary-bg:#0f5f89', 'the primary button must be light blue'),
+          ('--info:#7fc4e8', 'the dark interactive hue must be light blue'),
+          ('--info-text:#0f5f89', 'the light interactive ink must be light blue'),
+      ):
+          if token not in css:
+              print('FAIL palette v2.1:', why); sys.exit(1)
+      print('palette v2.1 check: PASS')
+      "
+
+# ------------------------------------------------------------------ unit+
+unit:
+  stage: test
+  script:
+    - pip install --quiet -e ".[test]"
+    - >-
+      python -m pytest tests
+      --cov=helm --cov-report=term --cov-fail-under=70
+      -v --junitxml=report.xml
+    # The named acceptance files must run tests, not vacuously pass.
+    - python -m pytest tests/test_role_gate.py -q --no-header
+    - python -m pytest tests/test_mcp_refusal.py -q --no-header
+    - python -m pytest tests/test_console_api.py -q --no-header
+    - python -m pytest tests/test_nemoclerk.py -q --no-header
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    paths:
+      - report.xml
+
+# ------------------------------------------- api+ (contract conformance)
+api-contract:
+  stage: test
+  script:
+    - pip install --quiet -e ".[test]"
+    - python -m openapi_spec_validator contracts/openapi.yaml
+    - python -m pytest tests/test_console_api.py -k "openapi or contract or privileged" -v
+
+contract-drift:
+  stage: test
+  # Fails if a route is served but undocumented, OR documented but unserved.
+  # Every other contract check in this federation tests one direction only,
+  # which is how an implemented-and-undeclared route survives review.
+  script:
+    - pip install --quiet -e ".[test]"
+    - HELM_ENV=test HELM_OFFLINE=1 python3 scripts/check-contract-drift.py
+    - python -m pytest tests/test_datasets_view.py -v
+
+# ------------------------------------------------------------- palette a11y+
+# The ONLY check in this pipeline that computes styles in a real browser.
+# Both palette defects it guards — a green focus ring at 2.41:1 on the
+# authorise control, and green links on the front door — were CASCADE
+# defects: the correct rule was present, correct, and last in app.css, and
+# still lost to an earlier, more specific selector. Every source-reading
+# check above passed while both were live, twice. So this job installs a
+# browser and presses Tab.
+# HELM_REQUIRE_BROWSER_GUARD=1 turns the local "skip if no chromium" into a
+# hard failure: a guard that can silently skip in CI is not a guard.
+palette-guard:
+  stage: verify
+  script:
+    - pip install --quiet -e ".[test]"
+    - python -m playwright install --with-deps chromium
+    - HELM_REQUIRE_BROWSER_GUARD=1 python -m pytest tests/test_palette_guard.py -v --no-header
+
+# --------------------------------------------------- console reachability+
+# The second browser job, and it exists for the same reason as the first: a
+# defect that every source-reading check passed straight over.
+#
+# The approval queue's per-row links were added once already, the finding
+# was closed, and the console went on emitting exactly 25 of them because
+# the TEMPLATE capped the loop. Reading views.py showed an href per held
+# effect and was true; reading the template showed [:25] and was also true;
+# only counting the anchors an operator can actually reach showed that most
+# irreversible effects had no path to a human at all. So this job counts
+# them, in a browser, against the length of the queue itself.
+#
+# It also asserts the NemoClerk transcript announces a new turn, and that
+# the ledger tail's whole-row walk answers a keyboard as well as a mouse.
+# Same HELM_REQUIRE_BROWSER_GUARD=1 contract: no silent skip in CI.
+console-reachability:
+  stage: verify
+  script:
+    - pip install --quiet -e ".[test]"
+    - python -m playwright install --with-deps chromium
+    - >-
+      HELM_REQUIRE_BROWSER_GUARD=1
+      python -m pytest tests/test_console_reachability.py -v --no-header
+
+# ------------------------------------------------------- readiness matrix+
+# Gates readiness/matrix.json on TWO things only: schema validity, and whether
+# its evidence pointers resolve to artifacts that exist.
+#
+# It does NOT gate on cell content, and that is deliberate. helm's matrix
+# legitimately holds partial, unknown, hidden and missing cells — the approval
+# queue lists 25 of 429 held effects, the MCP host has no navigation, the
+# NemoClerk transcript has no live region, and a real OIDC consent login has
+# never been performed. Those are true. A job that went red because the matrix
+# was honest would teach the next contributor that the cheapest route to green
+# is to overstate a cell, or simply to delete this job under time pressure.
+# So the gate is on the document's integrity, never on its verdict.
+#
+# Two of the gaps named above have since been closed and are now asserted by
+# the console-reachability job: the queue's 25-of-429 cap (it paginates,
+# filters, states its counts, and lists every held effect on one page) and
+# the transcript's missing live region. The matrix cells themselves are
+# left as written — they are a DATED measurement of a named revision, and
+# back-dating them to look better is precisely the substitution this gate
+# refuses. The next matrix run re-measures them.
+#
+# The script prints the state distribution and marks it REPORTED, NOT GATED,
+# so a reader can see the shape without the pipeline having an opinion on it.
+readiness-matrix:
+  stage: static
+  script:
+    - pip install --quiet jsonschema
+    - python3 scripts/check-readiness-matrix.py
+
+# --------------------------------------------------------------- smoke/BVT+
+bvt:
+  stage: verify
+  script:
+    - bash scripts/bvt.sh
+
+# ------------------------------------------------------- e2e+ (offline demo)
+demo-offline:
+  stage: verify
+  script:
+    - pip install --quiet -e ".[test]"
+    - python scripts/demo.py --offline --self-contained
+  artifacts:
+    when: always
+    paths:
+      - artifacts/demo-run.json
+
+# ------------------------------------------------------------------- int+
+# helm against a REAL throughline built from its own merged main. Requires
+# throughline's CI job-token allowlist to include this project.
+integration:
+  stage: verify
+  # NOT allow_failure. int+ was advisory, so a green pipeline did not prove
+  # integration — the one signal that exercises the REAL substrate could go
+  # red without failing anything. It gates now.
+  script:
+    - apt-get update -qq && apt-get install -y -qq git curl ca-certificates >/dev/null
+    # git.nemotron.example.com is internally signed: discover and install the CA rather
+    # than disabling verification. int+ is a claim about a REAL substrate, and
+    # reaching it over an unverified channel is weaker evidence, not stronger.
+    - bash scripts/fetch-substrate.sh /tmp/throughline
+    - pip install --quiet /tmp/throughline
+    - pip install --quiet -e ".[test]"
+    # throughline authenticates the CALLER on its privileged write surface — a
+    # decide, authz.* effects, warrant.* signals — and there is no off switch.
+    # Exported BEFORE the substrate boots so the gate and helm validate against
+    # the same secret by construction, rather than helm trying to read a 0600
+    # file inside /tmp/throughline that it does not own.
+    - export THROUGHLINE_CALLER_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    # Releasing an IRREVERSIBLE effect additionally requires an auth_mode on
+    # the substrate's allowlist. The default is `oidc` alone, and that default
+    # is right — but helm's demo console signs in with a MOCK session, so
+    # WITHOUT `mock` here a mock-login console cannot release an irreversible
+    # effect AT ALL and int+'s approve beat fails by design rather than by
+    # defect. This is the explicit, visible widening throughline's env switch
+    # exists for: it is named in /healthz and in every refusal payload, so a
+    # reader can always tell a chain released by verified identities from one
+    # released by a demo switch. It is NOT a weakening being snuck in.
+    - export THROUGHLINE_ATTESTED_AUTH_MODES=oidc,mock
+    - (cd /tmp/throughline && THROUGHLINE_PORT=8600 python -m throughline >/tmp/throughline.log 2>&1 &)
+    - for i in $(seq 1 40); do curl -fsS http://127.0.0.1:8600/healthz >/dev/null && break; sleep 1; done
+    - curl -fsS http://127.0.0.1:8600/healthz
+    - HELM_REQUIRE_REAL_SUBSTRATE=1 python scripts/integration_check.py

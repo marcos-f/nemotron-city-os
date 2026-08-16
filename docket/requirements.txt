@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+httpx>=0.27
+PyYAML>=6.0
+# throughline is not on PyPI; see pyproject.toml. CI installs it from source
+# with scripts/fetch-substrate.sh before installing docket.
+throughline>=0.2

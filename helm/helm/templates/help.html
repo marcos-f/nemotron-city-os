@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}NemoCity — help{% endblock %}
+{% block body_class %}page-help{% endblock %}
+{% block body %}
+<header class="topbar"><span class="product-name">NemoCity</span></header>
+<nav class="tabs">
+  <a href="/">home</a>
+  <a href="/guest">guest console</a>
+  <a href="/help" aria-current="page">help</a>
+  <a href="/docs">/docs</a>
+  <a href="/login">sign in</a>
+</nav>
+<main class="index-main">
+  <h1>help &amp; about</h1>
+
+  <div class="box">
+    <h3>What this is</h3>
+    <p>NemoCity is an agentic operations console: four real feeds (permits, microgrid
+      telemetry, 911 incidents, warehouse video) flow into one substrate that judges, gates
+      and ledgers every effect. An embedded copilot (NemoClerk) can drive almost everything in
+      the product over the same API a human uses &mdash; except approving its own irreversible
+      effect, which is refused by role, on the record.</p>
+  </div>
+
+  <div class="box">
+    <h3>What you can do without an account</h3>
+    <ul>
+      <li>Read the live ledger, the approval queue, feed and component status at
+        <a href="/guest">the read-only guest console</a> &mdash; the same data the public JSON
+        API serves, rendered as a page instead of raw JSON.</li>
+      <li>Call the read-only JSON endpoints directly: <span class="mono">/healthz</span>,
+        <span class="mono">/overview</span>, <span class="mono">/feeds</span>,
+        <span class="mono">/ledger</span>, <span class="mono">/approvals</span>,
+        <span class="mono">/effects</span> &mdash; all documented at <a href="/docs">/docs</a>.</li>
+      <li>Ask NemoClerk questions from the guest console; it answers from the same grounded
+        data and cannot act on your behalf.</li>
+    </ul>
+    <h3 style="margin-top:18px">What requires signing in</h3>
+    <ul>
+      <li>Approving, rejecting or releasing a held effect &mdash; always requires a verified
+        human identity (OIDC or GitHub OAuth). There is no mock or one-click identity on this
+        deployment.</li>
+      <li>Site configuration: roles, signal classes, gate policy, providers &mdash; admin role
+        only.</li>
+    </ul>
+  </div>
+
+  <div class="box">
+    <h3>Component status</h3>
+    <table>
+      <thead><tr><th>component</th><th>state</th><th>detail</th></tr></thead>
+      <tbody>
+        {%- for name, sib in ctx.siblings.items() %}
+        <tr>
+          <td>{{ name }}</td>
+          <td>{% if sib.online %}<span class="verify-badge">online</span>{% else %}<span class="muted">offline</span>{% endif %}</td>
+          <td class="muted" style="font-size:14px">{{ sib.detail or '—' }}</td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:15px">By name and state only &mdash; the address each
+      component listens on is not published to an unauthenticated caller.</p>
+  </div>
+
+  <div class="box">
+    <h3>Stuck? Where to go</h3>
+    <ul>
+      <li><a href="/">Home</a> &mdash; the two ways in: guest, or sign in.</li>
+      <li><a href="/guest">Guest console</a> &mdash; the whole read-only product.</li>
+      <li><a href="/docs">/docs</a> &mdash; the whole API surface, documented.</li>
+      <li><a href="/login">Sign in</a> &mdash; to operate the console.</li>
+    </ul>
+  </div>
+</main>
+<footer class="coord">feature-area://helm</footer>
+{% endblock %}

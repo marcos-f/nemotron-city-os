@@ -1,0 +1,22 @@
+{
+  "component": "breaker",
+  "phase": "done",
+  "criteria": {
+    "test://breaker/divergence-fires": "pass",
+    "test://breaker/gate-holds-forever": "pass (real throughline, in CI)",
+    "test://breaker/approval-executes": "pass (real throughline, in CI)",
+    "test://breaker/ledger-walk-3hops": "pass (real throughline, in CI)"
+  },
+  "subgoal": "SG6",
+  "blockers": [],
+  "notes": "Grid Watch complete. The rule is deterministic and renders line by line; the dispatch is irreversible and breaker verifies the gate held it rather than assuming; release requires an OIDC subject and dispatches exactly once; the chain walks back in three hops. cuOpt is registered as an alternate labelled unavailable-without-GPU, refused rather than faked, and never installed. A model-backed substrate (dsv4) is registered and available alongside the rule; the rule remains active by default.",
+  "updated_utc": "2026-08-16T05:01:45Z",
+  "evidence": {
+    "unit": "84 pytests green with the real gate reachable (77 + 7 integration); the unit job runs 77 with the 7 real-gate tests skipped, and the integration job runs those 7 against a real throughline with skips turned into failures. Coverage 88% (--cov-fail-under=70, failable, in CI). Counts read from the summary line, not estimated.",
+    "api": "openapi-spec-validator on contracts/openapi.yaml + every contract path implemented and smoked",
+    "int": "distinct CI job: throughline's own wheel artifact installed and booted on a free port, 7/7 integration tests green, its ledger valid afterwards. BREAKER_REQUIRE_REAL_GATE=1 makes a missing substrate a failure, not a skip.",
+    "bvt": "distinct CI job: pristine source copy, clean venv, free port, every contract path + the installed CLI",
+    "live": "breaker on :8602 against throughline on :8600 \u2014 divergence at tick 23 with the line-by-line pane, dispatch WAITING_AT_GATE (gate: real), release without a subject refused 422, identified release by oidc|ruiz executed exactly once, walk returned 3 hash-verified hops, throughline's ledger valid over 304 entries.",
+    "model_substrate": "dsv4 (deepseek-v4-flash-0731 on the DGX Spark at dgx-spark:18000) registered as an available alternate, operator-authorised 2026-08-16 as an exception to the entitled-models line. Live probe: endpoint serves the model; judgment returned in ~10s with confidence 0.95. Arithmetic stays in Python; the model returns only a verdict; unreachable or malformed replies ABSTAIN and propose nothing; responses cached to fixtures/model-cache so the demo replays offline (verified with BREAKER_MODEL_OFFLINE=1). On the fixture the model calls divergence at tick 22 against the rule's 23 \u2014 the disagreement is rendered in the pane with the model named, and the dispatch is held at the gate either way."
+  }
+}

@@ -1,0 +1,127 @@
+{% extends "shell.html" %}
+{% block main %}
+<h1>federation stewards</h1>
+
+<div class="box" data-coordinate="use-case://signet/bind-identity">
+  <h3>What this role is, and what it is not</h3>
+  <p><b>federation-steward</b> is a <b>voting franchise</b>. A holder may vote in
+  another dataset's break-glass quorum &mdash; and that is the whole of it. It
+  confers <b>no authority over any dataset</b>: no grants, no delegations, no
+  approvals. A steward who is a viewer in this console is still a viewer.</p>
+  <p>warrant needs it because break-glass requires two votes from admins of
+  <i>other</i> datasets across at least <b>two distinct datasets</b>, so one
+  person who administers six datasets is one vote, not six. On a small or
+  single-dataset federation no such quorum can form, and the stewards are the
+  named people who may supply one.</p>
+  <p>It is assigned here, by a helm <b>admin</b>, and every change is written to
+  the ledger. <b>A dataset admin cannot grant it</b> &mdash; someone who could
+  hand out the franchise could manufacture the quorum that exists to check them.</p>
+</div>
+
+{% if ctx.change %}
+<div class="box" data-coordinate="use-case://signet/bind-identity">
+  <h3>Recorded</h3>
+  <p><b>{{ ctx.change.subject }}</b>:
+    {{ ctx.change.old_global_role or 'no federation role' }}
+    &rarr; {{ ctx.change.new_global_role or 'no federation role' }},
+    by {{ ctx.change.changed_by }} at {{ ctx.change.at }}.</p>
+  <p class="muted">
+    {% if ctx.change.changed_by_verified %}
+      That grant was made by an identity <b>verified</b> against
+      {{ ctx.change.changed_by_issuer }}.
+    {% else %}
+      That grant was made by an <b>{{ ctx.change.changed_by_auth_mode|upper }}</b>
+      identity &mdash; nobody vouched for the person who made it. It is on the
+      record as such, and must not be read as a verified assignment.
+    {% endif %}
+    {% if ctx.change.ledgered %}
+      Ledgered{% if ctx.change.ledger_seq %} at seq {{ ctx.change.ledger_seq }}{% endif %}.
+    {% else %}
+      <b>NOT ledgered</b> &mdash; throughline did not accept the signal, so this
+      change exists in the role table but not in the chain.
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
+<div class="box" id="event-summary" data-coordinate="use-case://signet/bind-identity">
+  <h3>Who holds it &mdash; {{ ctx.holders|length }}
+    {{ 'person' if ctx.holders|length == 1 else 'people' }}</h3>
+  {% if ctx.holders %}
+  <table>
+    <thead><tr>
+      <th>subject</th><th>display</th><th>console role</th>
+      <th>provider</th><th>last seen</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for holder in ctx.holders %}
+      <tr>
+        <td>{{ holder.subject }}</td>
+        <td>{{ holder.display }}</td>
+        <td>{{ holder.role }} <span class="muted">(unchanged by this role)</span></td>
+        <td>{{ holder.provider or 'unknown' }}</td>
+        <td>{{ holder.last_seen or 'never' }}</td>
+        <td>
+          <form method="post" action="/admin/stewards/form">
+            <input type="hidden" name="subject" value="{{ holder.subject }}">
+            <input type="hidden" name="global_role" value="">
+            <button class="btn" type="submit">revoke</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if not ctx.quorum_possible %}
+  <div class="note">
+    <b>NO QUORUM FROM STEWARDS ALONE.</b> A break-glass needs two votes from two
+    distinct datasets. With {{ ctx.holders|length }} steward{{ '' if ctx.holders|length == 1 else 's' }}
+    and no other eligible dataset admins, warrant will refuse a request with
+    <code>WARRANT-BREAKGLASS-NO-QUORUM</code>. That is the correct answer, not a
+    fault to route around.
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="note">
+    <b>NOBODY HOLDS THIS ROLE.</b> No holder is seeded, deliberately: a default
+    steward would mean a break-glass quorum exists on every fresh install, which
+    is exactly the silent lowering of the bar this is meant to prevent.
+    <br><br>
+    Until someone is named here, a break-glass request on a federation with no
+    other eligible dataset admins refuses with
+    <code>WARRANT-BREAKGLASS-NO-QUORUM</code>. <b>That is the intended
+    behaviour.</b> Name a steward only when a real person has agreed to hold the
+    franchise.
+  </div>
+  {% endif %}
+</div>
+
+<div class="box" data-coordinate="use-case://signet/bind-identity">
+  <h3>Name a steward</h3>
+  {% if ctx.candidates %}
+  <form method="post" action="/admin/stewards/form">
+    <label for="steward-subject">subject</label>
+    <select id="steward-subject" name="subject">
+      {% for row in ctx.candidates %}
+      <option value="{{ row.subject }}">{{ row.subject }}
+        &mdash; {{ row.display }} ({{ row.role }})</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="global_role" value="federation-steward">
+    <button class="btn btn-primary" type="submit">Assign federation-steward</button>
+  </form>
+  <p class="muted">The change is ledgered against your subject
+    ({{ ctx.identity.subject }}), and the record notes whether your own identity
+    was verified.</p>
+  {% else %}
+  <p class="muted">Every known subject already holds a federation role, or is an
+    agent principal. Agents are not offered: a franchise exists to put a human in
+    the loop, so giving one to an agent would empty it of meaning.</p>
+  {% endif %}
+</div>
+
+<div class="suggested-actions">
+  <a class="btn" href="/admin">&#8592; Back to site configuration</a>
+  <a class="btn" href="/console">Console</a>
+</div>
+{% endblock %}

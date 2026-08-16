@@ -1,0 +1,117 @@
+{% extends "shell.html" %}
+{% import "_components.html" as c %}
+{% block main %}
+<h1>{{ ctx.page.h1 }}</h1>
+<div class="note" id="composed-note" data-coordinate="scenario://helm/composed-state">
+  <b>NOTE:</b> this state auto-composes on a live gate-hold.
+  {% if ctx.composed.assembled %}It assembled from the gate-hold below.
+  {% elif not ctx.gate_known %}throughline is not responding, so helm cannot tell
+  whether anything is held. Nothing is composed and nothing is claimed.
+  {% else %}The gate is reachable and nothing is held, so there is nothing to
+  compose &mdash; the panes below report their own state rather than invent one.
+  {% endif %}</div>
+{{ c.stage_timeline(ctx.stages, "scenario://helm/composed-state") }}
+
+<div class="box" id="event-summary" data-coordinate="scenario://helm/composed-state"
+     style="border-left:3px solid var(--amber)">
+  {% if ctx.composed.assembled %}
+  <h3>Composed &mdash; {{ ctx.gate_hold.description or ctx.gate_hold.effect_id }} gate hold</h3>
+  <p>panes assemble in response to a live signal &mdash; this state composes automatically
+    when a gate-hold occurs. Nothing here is a separate screen an operator navigates to;
+    it is helm reacting to breaker's dispatch proposal.</p>
+  <dl><dt>trigger</dt><dd>{{ ctx.composed.trigger }}</dd>
+    <dt>waiting since</dt><dd>{{ ctx.composed.waiting_since }}</dd>
+    <dt>approval</dt><dd>{{ ctx.gate_hold.id }}</dd></dl>
+  {% elif not ctx.gate_known %}
+  <h3>Not composed &mdash; gate state unknown</h3>
+  <p>The composed state reacts to a gate-hold. helm cannot currently read the
+    gate, so it does not know whether there is one. This is not a claim that
+    there is none.</p>
+  {% else %}
+  <h3>Not composed &mdash; no gate-hold</h3>
+  <p>The composed state is a reaction, not a page. The gate is reachable and
+    empty, so there is no irreversible moment to gather context around.</p>
+  {% endif %}
+</div>
+
+{{ c.decision_actions(ctx, ctx.gate_hold) }}
+
+<div class="compose-grid" id="composed-grid" data-coordinate="scenario://helm/composed-state"
+     style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div class="box" data-coordinate="scenario://breaker/divergence-rule">
+    <h3>SOC/temp sparkline</h3>
+    <svg viewBox="0 0 560 240" width="100%" style="max-width:560px" role="img"
+         aria-label="battery_4 state of charge falling while temperature rises">
+      <defs><pattern id="cgrid" width="56" height="30" patternUnits="userSpaceOnUse">
+        <path d="M56 0H0v30" fill="none" stroke="var(--line)" stroke-width=".5" opacity=".45"/></pattern></defs>
+      <rect x="48" y="16" width="480" height="180" fill="url(#cgrid)"/>
+      <rect x="48" y="16" width="480" height="180" fill="none" stroke="var(--line)" stroke-width="1"/>
+      <rect x="392" y="16" width="136" height="180" fill="var(--amber)" opacity=".07"/>
+      {#- left axis: state of charge, with units -#}
+      {%- for tick in ctx.soc_axis or [] %}
+      <text x="42" y="{{ tick.y + 4 }}" text-anchor="end" font-size="11"
+            fill="var(--accent-text)">{{ tick.label }}</text>
+      {%- endfor %}
+      {#- right axis: temperature, with units -#}
+      {%- for tick in ctx.temp_axis or [] %}
+      <text x="536" y="{{ tick.y + 4 }}" text-anchor="start" font-size="11"
+            fill="var(--muted)">{{ tick.label }}</text>
+      {%- endfor %}
+      <text x="14" y="150" font-size="11" fill="var(--accent-text)"
+            transform="rotate(-90 14 150)" letter-spacing="1">SOC %</text>
+      <text x="556" y="132" font-size="11" fill="var(--muted)"
+            transform="rotate(90 556 132)" letter-spacing="1">TEMP °C</text>
+      {%- if ctx.soc_points %}<polyline points="{{ ctx.soc_points }}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>{% endif %}
+      {%- if ctx.temp_points %}<polyline points="{{ ctx.temp_points }}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4"/>{% endif %}
+      <line x1="392" y1="16" x2="392" y2="196" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <circle cx="392" cy="124" r="5" fill="var(--amber)"/>
+      <text x="400" y="40" font-size="12" fill="var(--amber-text)" font-weight="600">divergence</text>
+      <text x="504" y="186" text-anchor="end" font-size="13" fill="var(--accent-text)" font-weight="700">{{ ctx.soc }}</text>
+    </svg>
+    {#- the legend lives OUTSIDE the plot: legend glyphs and data marks are
+        visually identical, so overlapping them makes both unreadable -#}
+    <div class="chart-legend">
+      <span class="swatch"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--accent)" stroke-width="2.5"/></svg>
+        state of charge (<b>%</b>, left axis)</span>
+      <span class="swatch"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4"/></svg>
+        temperature (<b>°C</b>, right axis)</span>
+      <span class="swatch"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="var(--amber)"/></svg>
+        <span style="color:var(--amber-text)">divergence</span></span>
+      {%- if ctx.chart_live %}
+      <span style="margin-left:auto">{{ ctx.chart_source }}</span>
+      {%- else %}
+      <span style="margin-left:auto;color:var(--amber-text)">no series plotted — {{ ctx.chart_note }}</span>
+      {%- endif %}
+    </div>
+  </div>
+  <div class="box" id="ledger-tail-filtered" data-coordinate="scenario://helm/ledger-tail">
+    <h3>Ledger tail (filtered to this chain)</h3>
+    <table><thead><tr><th>seq</th><th>kind</th><th>verify</th></tr></thead><tbody>
+      {%- for row in ctx.composed.ledger %}
+      <tr{% if row.effect_id %} data-effect-id="{{ row.effect_id }}"{% endif %}>
+        <td>{{ row.seq }}</td><td>{{ row.kind }}</td>
+        <td><span class="badge verify-badge">{{ '✓' if row.verified else '✗' }}</span></td></tr>
+      {%- else %}
+      <tr><td colspan="3" class="muted">{{ "throughline not responding — the chain
+        could not be read" if not ctx.gate_known else "the chain is readable and holds nothing yet" }}</td></tr>
+      {%- endfor %}
+    </tbody></table>
+  </div>
+  <div class="box" id="related-incidents" style="grid-column:1 / -1" data-coordinate="feature-area://siren">
+    <h3>Related siren incidents near site</h3>
+    <table><thead><tr><th>id</th><th>type</th><th>status</th></tr></thead><tbody>
+      {%- for inc in ctx.related_incidents %}
+      <tr><td>{{ inc.id }}</td><td>{{ inc.type }}</td><td>{{ inc.status }}</td></tr>
+      {%- else %}
+      <tr><td colspan="3" class="muted">siren has no incidents to relate</td></tr>
+      {%- endfor %}
+    </tbody></table>
+  </div>
+  {%- for pane in ctx.composed.panes if not pane.online %}
+  <div class="box" style="grid-column:1 / -1">
+    {{ c.offline_pane(pane.component, ctx.ports[pane.component], pane.detail,
+                      reason=("never_built" if pane.component == "blindspot" else "unreachable")) }}
+  </div>
+  {%- endfor %}
+</div>
+{% endblock %}

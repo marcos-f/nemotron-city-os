@@ -1,0 +1,6 @@
+version: 1
+effects:
+  - id: RULE-777
+    effect_type: something.odd
+    reversibility_class: probably-fine
+    auto_execute: false

@@ -1,0 +1,127 @@
+image: python:3.14-slim
+
+stages:
+  - test
+  - verify
+
+validate:
+  stage: test
+  script:
+    - pip install --quiet yamllint openapi-spec-validator PyYAML
+    - yamllint -d relaxed .
+    - python -m openapi_spec_validator contracts/openapi.yaml
+    - python3 -m json.tool mcp/tools.json >/dev/null
+    - python3 scripts/run-ultra-gate.py 01 02 03
+    - python3 scripts/check-wireframes.py
+
+readiness-matrix:
+  stage: test
+  # Validates readiness/matrix.json for SCHEMA VALIDITY and EVIDENCE-POINTER
+  # RESOLVABILITY, and for nothing else.
+  #
+  # It never gates on what the matrix says. No minimum count of `strong`, no
+  # failure on `unknown`, `hidden`, `missing` or `partial`, no comparison
+  # against a previous run. A readiness matrix that CI can fail on its findings
+  # stops recording findings — the honest `unknown` is the entire reason the
+  # format has that state, and a job that punished it would train the document
+  # to lie. What this job does catch is the failure mode the states cannot: a
+  # cell citing a file that was renamed or deleted, so the claim still reads
+  # true while its evidence has evaporated.
+  #
+  # The schema is vendored at readiness/readiness-matrix.schema.json because
+  # the runner has no access to the readiness-matrix plugin cache, and a
+  # validation job that cannot obtain its schema is a job that quietly passes.
+  variables:
+    GIT_DEPTH: "1"
+  script:
+    - pip install --quiet jsonschema
+    - python3 readiness/validate-matrix.py
+
+contract-drift:
+  stage: test
+  # The contract and the served routes must agree in BOTH directions. breaker's
+  # own contract tests only ever checked one — that every documented path is
+  # implemented — which stayed green while thirteen of fifteen served paths went
+  # undeclared. This job fails on a served-but-undocumented path (unless it is
+  # waived, with a reason, in contracts/undocumented.yaml) AND on a documented
+  # path the server does not serve. It also refuses a dataset registry that
+  # omits a licence or a provenance: a validate that cannot fail the build is
+  # not validation.
+  variables:
+    BREAKER_SUBSTRATE: mock
+  before_script:
+    # throughline is a real dependency now (breaker/app.py mounts its dataset
+    # discovery surface) and it is not on PyPI. One mechanism obtains it —
+    # scripts/fetch-throughline.sh, the same one scripts/with-throughline.sh
+    # has always used — and it goes in first so resolving breaker's own
+    # dependencies never reaches for a name PyPI does not have.
+    - pip install --quiet "$(bash scripts/fetch-throughline.sh)"
+  script:
+    - pip install --quiet -e ".[test]"
+    - python3 scripts/check-contract-drift.py
+    - breaker dataset validate
+
+unit:
+  stage: test
+  before_script:
+    # throughline is a real dependency now (breaker/app.py mounts its dataset
+    # discovery surface) and it is not on PyPI. One mechanism obtains it —
+    # scripts/fetch-throughline.sh, the same one scripts/with-throughline.sh
+    # has always used — and it goes in first so resolving breaker's own
+    # dependencies never reaches for a name PyPI does not have.
+    - pip install --quiet "$(bash scripts/fetch-throughline.sh)"
+  script:
+    - pip install --quiet -e ".[test]"
+    - >-
+      python -m pytest tests
+      --cov=breaker --cov-report=term-missing --cov-report=xml
+      --cov-fail-under=70
+      --junitxml=report.xml -p no:warnings
+  coverage: '/^TOTAL.+?(\d+\%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+bvt:
+  stage: verify
+  # Distinct from `unit`: a CLEAN venv, a pristine source copy, an install from
+  # pyproject, a real boot on a free port, every contract path over HTTP and the
+  # installed CLI. Proves the build, not the dev shell.
+  script:
+    - bash scripts/bvt.sh
+
+integration:
+  stage: verify
+  # int+ — the dispatch held by a REAL throughline, released on approval.
+  # scripts/with-throughline.sh installs the wheel scripts/fetch-throughline.sh
+  # pulls from throughline's `package` artifact (the job image has no git) and
+  # boots it on a free port, so this runs against the substrate's real code
+  # rather than breaker's mock.
+  # BREAKER_REQUIRE_REAL_GATE=1 makes "no substrate" a failure, not a skip.
+  variables:
+    BREAKER_REQUIRE_REAL_GATE: "1"
+  # NOTE: cross-project `needs:` (which would let the runner fetch throughline's
+  # wheel artifact) is a Premium feature and this instance rejects it —
+  # "needs: need has an unsupported type". So the job fetches the substrate
+  # itself over the API, which means it has to hold the internal CA chain.
+  before_script:
+    # throughline is a real dependency now (breaker/app.py mounts its dataset
+    # discovery surface) and it is not on PyPI. One mechanism obtains it —
+    # scripts/fetch-throughline.sh, the same one scripts/with-throughline.sh
+    # has always used — and it goes in first so resolving breaker's own
+    # dependencies never reaches for a name PyPI does not have.
+    - pip install --quiet "$(bash scripts/fetch-throughline.sh)"
+  script:
+    - pip install --quiet -e ".[test]"
+    - >-
+      bash scripts/with-throughline.sh
+      python -m pytest tests/test_integration_real_gate.py
+      -p no:warnings --junitxml=integration.xml
+  artifacts:
+    when: always
+    reports:
+      junit: integration.xml

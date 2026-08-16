@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "_components.html" as c %}
+{% block title %}{{ ctx.page.title }}{% endblock %}
+{% block body_class %}page-{{ ctx.page.slug }}{% endblock %}
+{% block body %}
+{{ c.topbar(ctx) }}
+{{ c.tabs(ctx.page.slug) }}
+<div class="shell">
+{% block left_rail %}{{ c.feeds_rail(ctx) }}{% endblock %}
+<main>
+{% block main %}{% endblock %}
+</main>
+{{ c.nemoclerk_rail(ctx) }}
+</div>
+<footer class="coord">{{ ctx.page.footer }}</footer>
+{{ c.scenario_modal(ctx) }}
+{% endblock %}

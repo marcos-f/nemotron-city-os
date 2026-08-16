@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}NemoCity — read-only guest view{% endblock %}
+{% block body_class %}page-guest{% endblock %}
+{% block body %}
+<header class="topbar"><span class="product-name">NemoCity</span>
+  <span class="badge" data-coordinate="scenario://helm/guest-view">read-only guest &mdash; no account</span>
+</header>
+<nav class="tabs">
+  <a href="/" >home</a>
+  <a href="/guest" aria-current="page">guest console</a>
+  <a href="/help">help</a>
+  <a href="/docs">/docs</a>
+  <a href="/login">sign in</a>
+</nav>
+<main class="index-main" data-coordinate="scenario://helm/guest-view">
+  <h1>read-only console &mdash; you are not signed in</h1>
+  <p class="muted">Every figure on this page is read live from the same data the public JSON
+    API (<span class="mono">/healthz</span>, <span class="mono">/overview</span>,
+    <span class="mono">/ledger</span>, <span class="mono">/approvals</span>) already serves to
+    anyone. Nothing here is sample or invented data, and nothing on this page can approve,
+    reject or release anything &mdash; <a href="/login">sign in</a> with a verified identity to
+    do that.</p>
+
+  <div class="box" data-coordinate="feature-area://helm">
+    <h3>Component status</h3>
+    <div class="chip-row" style="display:flex;gap:10px;flex-wrap:wrap">
+      {%- for name, sib in ctx.siblings.items() %}
+      <span class="badge" data-coordinate="feature-area://{{ name }}">{{ name }}
+        {%- if sib.online %} <span class="verify-badge">online</span>
+        {%- else %} <span class="muted">offline</span>{% endif %}</span>
+      {%- endfor %}
+    </div>
+    <p class="muted" style="font-size:15px">Named and stated only &mdash; the address each
+      component listens on is withheld from an unauthenticated view (an admin session may
+      still ask for it, at <span class="mono">/healthz</span>).</p>
+  </div>
+
+  <div class="box" id="event-summary">
+    <h3>Ledger tail (live)</h3>
+    {% if ctx.ledger.online %}
+    <table>
+      <thead><tr><th>seq</th><th>when</th><th>kind</th><th>subject</th><th>hash-prefix</th></tr></thead>
+      <tbody>
+        {%- for row in ctx.ledger.rows %}
+        <tr>
+          <td>{{ row.seq }}</td>
+          <td class="mono">{{ row.ts }}</td>
+          <td>{{ row.kind }}{% if row.repeats > 1 %} <span class="badge">&times;{{ row.repeats }}</span>{% endif %}</td>
+          <td>{{ row.subject or '—' }}</td>
+          <td class="mono">{{ row.hash_prefix }}</td>
+        </tr>
+        {%- else %}
+        <tr><td colspan="5" class="muted">the chain is readable and holds nothing yet</td></tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:15px">chain length {{ ctx.ledger.chain_length }} &middot;
+      head {{ ctx.ledger.head[:8] }}</p>
+    {% else %}
+    <p><span class="badge">ledger unreadable</span> throughline is not responding, so there is
+      no tail to show. This page is not asserting anything about the chain's contents.</p>
+    {% endif %}
+  </div>
+
+  <div class="box" id="approval-queue">
+    <h3>Approval queue</h3>
+    {% if not ctx.gate.known %}
+    <p><span class="badge">gate state unknown</span> throughline is not responding, so this
+      view cannot see the gate. No figure is substituted.</p>
+    {% elif ctx.queue_rows %}
+    <p><span class="badge">{{ ctx.queue_rows|length }} approval{{ '' if ctx.queue_rows|length == 1 else 's' }} held</span>
+      every one of these is held for a human and none of them times out.</p>
+    <table>
+      <thead><tr><th>approval</th><th>effect</th><th>class</th><th>waiting</th><th>can you decide it?</th></tr></thead>
+      <tbody>
+        {%- for row in ctx.queue_rows %}
+        <tr>
+          <td class="mono">{{ row.id }}</td>
+          <td>{{ row.description }}</td>
+          <td>{% if row.reversibility == 'irreversible' %}<b>{{ row.reversibility }}</b>{% else %}{{ row.reversibility }}{% endif %}</td>
+          <td>{{ row.age }}</td>
+          <td><span class="muted">HELD &mdash; sign in with a verified identity to review or decide</span></td>
+        </tr>
+        {%- endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:15px">No decide control exists on this page for any
+      role: a guest is not an identified human, and nothing here can reach the approval
+      path.</p>
+    {% else %}
+    <p><span class="badge verify-badge">0 waiting</span> the gate is reachable and the queue
+      is empty &mdash; nothing is held.</p>
+    {% endif %}
+  </div>
+
+  <div class="box" id="signal-class-status">
+    <h3>Signal-class status</h3>
+    <div class="chip-row" style="display:flex;gap:10px;flex-wrap:wrap">
+      {%- for feed in ctx.feeds %}
+      <span class="badge">{{ feed.name }}
+        {%- if feed.online %} <span class="verify-badge">{{ feed.status }}</span>
+        {%- else %} <span class="muted">component offline</span>{% endif %}</span>
+      {%- endfor %}
+    </div>
+  </div>
+
+  <div class="note">This is the whole guest view: read-only, unauthenticated, and permanent
+    &mdash; it is not a trial and does not expire into a sign-up wall.
+    <a href="/login">Sign in</a> to operate the console, or read the same data programmatically
+    at <a href="/docs">/docs</a>.</div>
+</main>
+<footer class="coord">scenario://helm/guest-view</footer>
+{% endblock %}

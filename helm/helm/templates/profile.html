@@ -1,0 +1,38 @@
+{% extends "shell.html" %}
+{% block main %}
+<h1>profile &amp; display identity</h1>
+<div class="box" id="event-summary" data-coordinate="scenario://signet/oidc-login">
+  <h3>Signet identity</h3>
+  <dl>
+    <dt>subject</dt><dd>{{ ctx.identity.subject }}</dd>
+    <dt>issuer</dt>
+    <dd>{% if ctx.identity.issuer %}{{ ctx.identity.issuer }} &mdash; this authority verified
+      the subject above, and both are written into every approval you make
+      {% else %}none &mdash; nobody vouched for this subject. It is asserted by this console,
+      not verified, and every record it produces says so{% endif %}</dd>
+    <dt>authentication</dt>
+    <dd>{{ ctx.identity.auth_badge }} &mdash; {{ ctx.identity.auth_detail }}</dd>
+    <dt>provider</dt><dd>{{ ctx.identity.provider }}{% if ctx.identity.mock %} (mock login){% endif %}</dd>
+    <dt>display name</dt><dd>{{ ctx.identity.display }}</dd>
+    <dt>role</dt><dd>{{ ctx.identity.role }} &mdash; from signet's own table, never from the token</dd>
+    <dt>may approve</dt><dd>{{ 'yes — this subject lands in the approval record' if ctx.identity.may_approve else 'no' }}</dd>
+    <dt>federation role</dt>
+    <dd>{% if ctx.identity.global_role %}<b>{{ ctx.identity.global_role }}</b> &mdash; you may
+      vote in another dataset's break-glass quorum. It grants no authority over any
+      dataset and does not change what your <code>{{ ctx.identity.role }}</code> role
+      above may do
+      {% else %}none &mdash; you hold no federation-level role{% endif %}</dd>
+  </dl>
+</div>
+<div class="box" data-coordinate="scenario://helm/shell-tabs">
+  <h3>Preferences (stored server-side against your subject)</h3>
+  <dl>
+    <dt>theme</dt><dd>{{ ctx.prefs.theme }}</dd>
+    <dt>feeds rail</dt><dd>{{ 'collapsed' if ctx.prefs.feeds_collapsed else 'expanded' }} &middot; {{ ctx.prefs.feeds_width }}px</dd>
+    <dt>NemoClerk rail</dt><dd>{{ 'collapsed' if ctx.prefs.rail_collapsed else 'expanded' }} &middot; {{ ctx.prefs.rail_width }}px</dd>
+  </dl>
+</div>
+<div class="suggested-actions">
+  <a class="btn btn-primary" href="/console">&#8592; Back to console</a>
+</div>
+{% endblock %}
